@@ -1,19 +1,33 @@
 #include "./Typedefs.h"
 #include "./String.h"
 #include "./BasicRenderer.hpp"
+#include "./EfiMemory.h"
 
-extern "C" void _start(Framebuffer* framebuffer, PSF1_Font *font) {
-	BasicRenderer renderer = BasicRenderer(framebuffer, font);
+typedef struct BootInfo_t {
+	Framebuffer *FrameBuffer;
+	PSF1_Font *PSF1Font;
+	EfiMemoryDescriptor *MemoryMap;
+	u64 MemoryMapSize;
+	u64 MemoryMapDescriptorSize;
+} BootInfo;
 
-	renderer.PrintString(StringFromUInt(1234987));
-	renderer.PrintChar('\r');
-	renderer.PrintChar('\n');
-	renderer.PrintString(StringFromInt(-976123));
-	renderer.PrintChar('\r');
-	renderer.PrintChar('\n');
-	renderer.PrintString(StringFromFloat(-123.745, 3));
+extern "C" {
+	void _start(BootInfo *bootInfo) {
+		BasicRenderer renderer = BasicRenderer(bootInfo->FrameBuffer, bootInfo->PSF1Font);
 
-	while (true) {
-		asm ("hlt");
+		u64 memoryMapEntries = bootInfo->MemoryMapSize / bootInfo->MemoryMapDescriptorSize;
+		for (u64 i = 0; i < memoryMapEntries; i++) {
+			EfiMemoryDescriptor* descriptor = cast(EfiMemoryDescriptor*) (cast(u64) bootInfo->MemoryMap + (i * bootInfo->MemoryMapDescriptorSize));
+			renderer.PrintString(EfiMemoryTypeStrings[descriptor->Type]);
+			renderer.PrintChar(' ');
+			renderer.PrintString(StringFromUInt(descriptor->NumPages * 4096 / 1024), 0xFFFF00FF);
+			renderer.PrintString(StringFromLiteral("kb"), 0xFFFF00FF);
+			renderer.PrintChar('\r');
+			renderer.PrintChar('\n');
+		}
+
+		while (true) {
+			asm ("hlt");
+		}
 	}
 }

@@ -149,6 +149,14 @@ PSF1_Font *LoadPSF1Font(EFI_FILE *directory, CHAR16 *path, EFI_HANDLE imageHandl
 	return finishedFont;
 }
 
+typedef struct BootInfo_t {
+	Framebuffer *FrameBuffer;
+	PSF1_Font *PSF1Font;
+	EFI_MEMORY_DESCRIPTOR *MemoryMap;
+	UINTN MemoryMapSize;
+	UINTN MemoryMapDescriptorSize;
+} BootInfo;
+
 EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 	InitializeLib(imageHandle, systemTable);
 
@@ -235,7 +243,28 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 		newBuffer->PixelsPerScanLine
 	);
 
-	(cast(__attribute__((sysv_abi)) void (*)(Framebuffer*, PSF1_Font*)) header.e_entry)(newBuffer, newFont);
+	EFI_MEMORY_DESCRIPTOR *map;
+	UINTN mapSize;
+	UINTN mapKey;
+	UINTN descriptorSize;
+	UINT32 descriptorVersion;
+	{
+		systemTable->BootServices->GetMemoryMap(&mapSize, NULL, &mapKey, &descriptorSize, &descriptorVersion);
+		systemTable->BootServices->AllocatePool(EfiLoaderData, mapSize, cast(void**) &map);
+		systemTable->BootServices->GetMemoryMap(&mapSize, map, &mapKey, &descriptorSize, &descriptorVersion);
+	}
+
+	BootInfo bootInfo = (BootInfo) {
+		.FrameBuffer = newBuffer,
+		.PSF1Font = newFont,
+		.MemoryMap = map,
+		.MemoryMapSize = mapSize,
+		.MemoryMapDescriptorSize = descriptorSize,
+	};
+
+	systemTable->BootServices->ExitBootServices(imageHandle, mapKey);
+
+	(cast(__attribute__((sysv_abi)) void (*)(BootInfo*)) header.e_entry)(&bootInfo);
 
 	return EFI_SUCCESS;
 }
