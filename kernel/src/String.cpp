@@ -1,20 +1,8 @@
 #include "./String.h"
 
 extern "C" {
-	String StringFromu8(u8 value) {
-		return StringFromu64(cast(u64) value);
-	}
-
-	String StringFromu16(u16 value) {
-		return StringFromu64(cast(u64) value);
-	}
-
-	String StringFromu32(u32 value) {
-		return StringFromu64(cast(u64) value);
-	}
-
-	static u8 StringFromu64Output[128]; // TODO: Allocate memory
-	String StringFromu64(u64 value) {
+	static u8 StringFromUIntOutput[128]; // TODO: Allocate memory
+	String StringFromUInt(u64 value) {
 		u8 length = 0;
 
 		u64 temp = value;
@@ -27,37 +15,25 @@ extern "C" {
 		while (value / 10 > 0) {
 			u8 remainder = value % 10;
 			value /= 10;
-			StringFromu64Output[length - index] = remainder + '0';
+			StringFromUIntOutput[length - index] = remainder + '0';
 			index++;
 		}
 
 		u8 remainder = value % 10;
-		StringFromu64Output[length - index] = remainder + '0';
+		StringFromUIntOutput[length - index] = remainder + '0';
 
 		return (String) {
-			.Data = StringFromu64Output,
+			.Data = StringFromUIntOutput,
 			.Length = cast(u64) length + 1,
 		};
 	}
 
-	String StringFroms8(s8 value) {
-		return StringFroms64(cast(s64) value);
-	}
-	
-	String StringFroms16(s16 value) {
-		return StringFroms64(cast(s64) value);
-	}
-
-	String StringFroms32(s32 value) {
-		return StringFroms64(cast(s64) value);
-	}
-
-	static u8 StringFroms64Output[128]; // TODO: Allocate memory
-	String StringFroms64(s64 value) {
+	static u8 StringFromIntOutput[128]; // TODO: Allocate memory
+	String StringFromInt(s64 value) {
 		b8 isNegative = value < 0;
 		if (isNegative) {
 			value *= -1;
-			StringFroms64Output[0] = '-';
+			StringFromIntOutput[0] = '-';
 		}
 
 		u8 length = 0;
@@ -72,26 +48,22 @@ extern "C" {
 		while (value / 10 > 0) {
 			u8 remainder = value % 10;
 			value /= 10;
-			StringFroms64Output[length - index + isNegative] = remainder + '0';
+			StringFromIntOutput[length - index + isNegative] = remainder + '0';
 			index++;
 		}
 
 		u8 remainder = value % 10;
-		StringFroms64Output[length - index + isNegative] = remainder + '0';
+		StringFromIntOutput[length - index + isNegative] = remainder + '0';
 
 		return (String) {
-			.Data = StringFroms64Output,
+			.Data = StringFromIntOutput,
 			.Length = cast(u64) length + 1 + isNegative,
 		};
 	}
 
-	String StringFromf32(f32 value, u8 decimals) {
-		return StringFromf64(cast(f64) value, decimals);
-	}
-
-	static u8 StringFromf64Output[128]; // TODO: Allocate memory
-	String StringFromf64(f64 value, u8 decimals) {
-		String intString = StringFroms64(cast(s64) value);
+	static u8 StringFromFloatOutput[128]; // TODO: Allocate memory
+	String StringFromFloat(f64 value, u8 decimals) {
+		String intString = StringFromInt(cast(s64) value);
 
 		if (value < 0) {
 			value *= -1;
@@ -102,21 +74,21 @@ extern "C" {
 
 		u64 index = 0;
 		for (u64 i = 0; i < intString.Length; i++) {
-			StringFromf64Output[i] = intString.Data[i];
+			StringFromFloatOutput[i] = intString.Data[i];
 			index++;
 		}
 
 		if (decimals > 0) {
-			StringFromf64Output[index++] = '.';
+			StringFromFloatOutput[index++] = '.';
 			for (u64 i = 0; i < decimals; i++) {
 				value *= 10;
 				u8 remainder = cast(s64) value % 10;
-				StringFromf64Output[index++] = remainder + '0';
+				StringFromFloatOutput[index++] = remainder + '0';
 			}
 		}
 
 		return (String) {
-			.Data = StringFromf64Output,
+			.Data = StringFromFloatOutput,
 			.Length = cast(u64) length,
 		};
 	}
