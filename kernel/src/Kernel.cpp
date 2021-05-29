@@ -3,14 +3,17 @@
 #include "./BasicRenderer.hpp"
 
 extern "C" void _start(Framebuffer* framebuffer, PSF1_Font *font) {
-	String string = StringFromLiteral("Hello\nKernel");
+	BasicRenderer renderer = BasicRenderer(framebuffer, font);
 
-	BasicRenderer renderer(framebuffer, font);
-	renderer.CursorX = 50;
-	renderer.CursorY = 120;
-	renderer.PrintString(string);
+	renderer.PrintString(StringFromu64(1234987));
+	renderer.PrintChar('\r');
+	renderer.PrintChar('\n');
+	renderer.PrintString(StringFroms64(-976123));
+	renderer.PrintChar('\r');
+	renderer.PrintChar('\n');
+	renderer.PrintString(StringFromf64(-123.745, 3));
 
-	while(1) {
+	while (true) {
 		asm ("hlt");
 	}
 }

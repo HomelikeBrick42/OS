@@ -13,6 +13,8 @@ typedef signed long long s64;
 typedef float  f32;
 typedef double f64;
 
+typedef u8 b8;
+
 #if defined(__cplusplus)
 	#define SIZE_ASSERT(type, size) \
 		static_assert(sizeof(type) == size, "Expected sizeof " #type " to be " #size " bytes.")
@@ -33,6 +35,8 @@ SIZE_ASSERT(s64, 8);
 
 SIZE_ASSERT(s32, 4);
 SIZE_ASSERT(s64, 8);
+
+SIZE_ASSERT(b8,  1);
 
 #undef SIZE_ASSERT
 
