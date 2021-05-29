@@ -13,12 +13,19 @@ typedef double f64;
 
 #define cast(type) (type)
 
+typedef struct __attribute__((packed)) String_t {
+	u8* Data;
+	u64 Length;
+} String;
+
+#define StringFromLiteral(s) (String) { .Data = cast(u8*) s, .Length = sizeof(s) - 1 }
+
 typedef enum FramebufferPixelFormat_t {
 	FramebufferPixelFormat_RGBA,
 	FramebufferPixelFormat_BGRA,
 } FramebufferPixelFormat;
 
-typedef struct Framebuffer_t {
+typedef struct __attribute__((packed)) Framebuffer_t {
 	void* BaseAddress;
 	u64 BufferSize;
 	u64 Width;
@@ -27,33 +34,45 @@ typedef struct Framebuffer_t {
 	FramebufferPixelFormat PixelFormat;
 } Framebuffer;
 
-void WritePixel(Framebuffer *framebuffer, u64 x, u64 y, u8 r, u8 g, u8 b, u8 a) {
-	switch (framebuffer->PixelFormat) {
-		case FramebufferPixelFormat_RGBA: {
-			u8* pixel = cast(u8*) ((x * 4) + (y * framebuffer->PixelsPerScanLine * 4) + framebuffer->BaseAddress);
-			*pixel++ = r;
-			*pixel++ = g;
-			*pixel++ = b;
-			*pixel++ = a;
-		} break;
+#define PSF1_MAGIC_BYTE_0 0x36
+#define PSF1_MAGIC_BYTE_1 0x04
 
-		case FramebufferPixelFormat_BGRA: {
-			u8* pixel = cast(u8*) ((x * 4) + (y * framebuffer->PixelsPerScanLine * 4) + framebuffer->BaseAddress);
-			*pixel++ = b;
-			*pixel++ = g;
-			*pixel++ = r;
-			*pixel++ = a;
-		} break;
+typedef struct __attribute__((packed)) PSF1_Header_t {
+	u8 MagicBytes[2];
+	u8 Mode;
+	u8 CharSize;
+} PSF1_Header;
 
-		default: {
-		} break;
-	}
+typedef struct __attribute__((packed)) PSF1_Font_t {
+	PSF1_Header *Header;
+	void* GlyphBuffer;
+} PSF1_Font;
+
+void WriteChar(Framebuffer *framebuffer, PSF1_Font *font, u32 color, u8 chr, u64 xOffset, u64 yOffset);
+void WriteString(Framebuffer *framebuffer, PSF1_Font *font, u32 color, String string, u64 xOffset, u64 yOffset);
+
+void _start(Framebuffer* framebuffer, PSF1_Font *font) {
+	WriteString(framebuffer, font, 0xFFFFFFFF, StringFromLiteral("Hello"), 10, 10);
 }
 
-void _start(Framebuffer* framebuffer) {
-	u64 y = 50;
+void WriteChar(Framebuffer *framebuffer, PSF1_Font *font, u32 color, u8 chr, u64 xOffset, u64 yOffset) {
+	// TODO: TranslateColor
 
-	for (u64 x = 0; x < framebuffer->Width / 2; x++) {
-		WritePixel(framebuffer, x, y, 0xFF, 0xFF, 0x00, 0xFF);
+	u32* pixPtr = cast(u32*) framebuffer->BaseAddress;
+    u8* fontPtr = font->GlyphBuffer + (chr * font->Header->CharSize);
+    for (u64 y = yOffset; y < yOffset + font->Header->CharSize; y++){
+        for (u64 x = xOffset; x < xOffset + (font->Header->CharSize / 2); x++){
+            if ((*fontPtr & (0b10000000 >> (x - xOffset))) > 0){
+				u32* pixel = cast(u32*) (pixPtr + x + (y * framebuffer->PixelsPerScanLine));
+				*pixel = color;
+			}
+        }
+        fontPtr++;
+    }
+}
+
+void WriteString(Framebuffer *framebuffer, PSF1_Font *font, u32 color, String string, u64 xOffset, u64 yOffset) {
+	for (u64 i = 0; i < string.Length; i++) {
+		WriteChar(framebuffer, font, color, string.Data[i], xOffset + (i * font->Header->CharSize / 2), yOffset);
 	}
 }

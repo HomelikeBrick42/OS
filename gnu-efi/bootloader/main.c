@@ -22,7 +22,7 @@ typedef enum FramebufferPixelFormat_t {
 	FramebufferPixelFormat_BGRA,
 } FramebufferPixelFormat;
 
-typedef struct Framebuffer_t {
+typedef struct __attribute__((packed)) Framebuffer_t {
 	void* BaseAddress;
 	u64 BufferSize;
 	u64 Width;
@@ -31,8 +31,50 @@ typedef struct Framebuffer_t {
 	FramebufferPixelFormat PixelFormat;
 } Framebuffer;
 
-Framebuffer gFramebuffer;
+#define PSF1_MAGIC_BYTE_0 0x36
+#define PSF1_MAGIC_BYTE_1 0x04
 
+typedef struct __attribute__((packed)) PSF1_Header_t {
+	u8 MagicBytes[2];
+	u8 Mode;
+	u8 CharSize;
+} PSF1_Header;
+
+typedef struct __attribute__((packed)) PSF1_Font_t {
+	PSF1_Header *Header;
+	void* GlyphBuffer;
+} PSF1_Font;
+
+EFI_FILE *LoadFile(EFI_FILE *directory, CHAR16 *path, EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
+	EFI_LOADED_IMAGE_PROTOCOL *loadedImage;
+	systemTable->BootServices->HandleProtocol(imageHandle, &gEfiLoadedImageProtocolGuid, cast(void**) &loadedImage);
+
+	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fileSystem;
+	systemTable->BootServices->HandleProtocol(loadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, cast(void**) &fileSystem);
+
+	if (directory == NULL) {
+		fileSystem->OpenVolume(fileSystem, &directory);
+	}
+
+	EFI_FILE *loadedFile;
+	EFI_STATUS status = directory->Open(directory, &loadedFile, path, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
+	if (status != EFI_SUCCESS) {
+		return NULL;
+	}
+
+	return loadedFile;
+}
+
+int memcmp(const void* a, const void* b, u64 n) {
+	for (u64 i = 0; i < n; i++) {
+		if ((cast(u8*) a)[i] < (cast(u8*) b)[i]) return -1;
+		if ((cast(u8*) a)[i] > (cast(u8*) b)[i]) return 1;
+	}
+
+	return 0;
+}
+
+Framebuffer gFramebuffer;
 Framebuffer *InitializeGOP() {
 	EFI_GUID gopGuid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
 
@@ -71,33 +113,40 @@ Framebuffer *InitializeGOP() {
 	return &gFramebuffer;
 }
 
-EFI_FILE *LoadFile(EFI_FILE *directory, CHAR16 *path, EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
-	EFI_LOADED_IMAGE_PROTOCOL *loadedImage;
-	systemTable->BootServices->HandleProtocol(imageHandle, &gEfiLoadedImageProtocolGuid, cast(void**) &loadedImage);
-
-	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fileSystem;
-	systemTable->BootServices->HandleProtocol(loadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, cast(void**) &fileSystem);
-
-	if (directory == NULL) {
-		fileSystem->OpenVolume(fileSystem, &directory);
-	}
-
-	EFI_FILE *loadedFile;
-	EFI_STATUS status = directory->Open(directory, &loadedFile, path, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
-	if (status != EFI_SUCCESS) {
+PSF1_Font *LoadPSF1Font(EFI_FILE *directory, CHAR16 *path, EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
+	EFI_FILE *font = LoadFile(directory, path, imageHandle, systemTable);
+	if (font == NULL) {
 		return NULL;
 	}
 
-	return loadedFile;
-}
+	PSF1_Header* fontHeader;
+	systemTable->BootServices->AllocatePool(EfiLoaderData, sizeof(PSF1_Header), cast(void**) &fontHeader);
+	UINTN size = sizeof(PSF1_Header);
+	font->Read(font, &size, fontHeader);
 
-int memcmp(const void* a, const void* b, u64 n) {
-	for (u64 i = 0; i < n; i++) {
-		if ((cast(u8*) a)[i] < (cast(u8*) b)[i]) return -1;
-		if ((cast(u8*) a)[i] > (cast(u8*) b)[i]) return 1;
+	if (fontHeader->MagicBytes[0] != PSF1_MAGIC_BYTE_0 ||
+		fontHeader->MagicBytes[1] != PSF1_MAGIC_BYTE_1) {
+		return NULL;
 	}
 
-	return 0;
+	UINTN glyphBufferSize = fontHeader->CharSize * 256;
+	if (fontHeader->Mode == 1) {
+		glyphBufferSize = fontHeader->CharSize * 512;
+	}
+
+	void* glyphBuffer;
+	{
+		font->SetPosition(font, sizeof(PSF1_Header));
+		systemTable->BootServices->AllocatePool(EfiLoaderData, glyphBufferSize, cast(void**) &glyphBuffer);
+		font->Read(font, &glyphBufferSize, glyphBuffer);
+	}
+
+	PSF1_Font* finishedFont;
+	systemTable->BootServices->AllocatePool(EfiLoaderData, sizeof(PSF1_Font), cast(void**) &finishedFont);
+	finishedFont->Header = fontHeader;
+	finishedFont->GlyphBuffer = glyphBuffer;
+
+	return finishedFont;
 }
 
 EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
@@ -123,14 +172,12 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 		kernel->Read(kernel, &size, &header);
 	}
 
-	if (
-		memcmp(&header.e_ident[EI_MAG0], ELFMAG, SELFMAG) != 0 ||
+	if (memcmp(&header.e_ident[EI_MAG0], ELFMAG, SELFMAG) != 0 ||
 		header.e_ident[EI_CLASS] != ELFCLASS64 ||
 		header.e_ident[EI_DATA] != ELFDATA2LSB ||
 		header.e_type != ET_EXEC ||
 		header.e_machine != EM_X86_64 ||
-		header.e_version != EV_CURRENT
-	) {
+		header.e_version != EV_CURRENT) {
 		Print(L"Kernel format is bad\r\n");
 	} else {
 		Print(L"Kernel header successfully verified\r\n");
@@ -167,6 +214,14 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 
 	Print(L"Kernel loaded\r\n");
 
+	PSF1_Font *newFont = LoadPSF1Font(NULL, L"zap-light16.psf", imageHandle, systemTable);
+	if (newFont == NULL) {
+		Print(L"Could not load font\r\n");
+		return EFI_NOT_FOUND;
+	} else {
+		Print(L"Font loaded successfuly\r\nChar Size: %d\r\n", newFont->Header->CharSize);
+	}
+
 	Framebuffer *newBuffer = InitializeGOP();
 	if (newBuffer == NULL) {
 		return EFI_UNSUPPORTED;
@@ -180,7 +235,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 		newBuffer->PixelsPerScanLine
 	);
 
-	(cast(__attribute__((sysv_abi)) void (*)(Framebuffer*)) header.e_entry)(newBuffer);
+	(cast(__attribute__((sysv_abi)) void (*)(Framebuffer*, PSF1_Font*)) header.e_entry)(newBuffer, newFont);
 
 	return EFI_SUCCESS;
 }
