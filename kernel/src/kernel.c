@@ -52,7 +52,7 @@ void WriteChar(Framebuffer *framebuffer, PSF1_Font *font, u32 color, u8 chr, u64
 void WriteString(Framebuffer *framebuffer, PSF1_Font *font, u32 color, String string, u64 xOffset, u64 yOffset);
 
 void _start(Framebuffer* framebuffer, PSF1_Font *font) {
-	WriteString(framebuffer, font, 0xFFFFFFFF, StringFromLiteral("Hello"), 10, 10);
+	WriteString(framebuffer, font, 0xFFFFFFFF, StringFromLiteral("Hello\r\nKernel"), 0, 0);
 }
 
 void WriteChar(Framebuffer *framebuffer, PSF1_Font *font, u32 color, u8 chr, u64 xOffset, u64 yOffset) {
@@ -73,6 +73,23 @@ void WriteChar(Framebuffer *framebuffer, PSF1_Font *font, u32 color, u8 chr, u64
 
 void WriteString(Framebuffer *framebuffer, PSF1_Font *font, u32 color, String string, u64 xOffset, u64 yOffset) {
 	for (u64 i = 0; i < string.Length; i++) {
-		WriteChar(framebuffer, font, color, string.Data[i], xOffset + (i * font->Header->CharSize / 2), yOffset);
+		switch (string.Data[i]) {
+			case '\r': {
+				xOffset = 0;
+			} break;
+
+			case '\n': {
+				yOffset += font->Header->CharSize;
+			} break;
+
+			default: {
+				WriteChar(framebuffer, font, color, string.Data[i], xOffset, yOffset);
+				xOffset += font->Header->CharSize / 2;
+				if (xOffset + font->Header->CharSize / 2 > framebuffer->Width) {
+					xOffset = 0;
+					yOffset += font->Header->CharSize;
+				}
+			} break;
+		}
 	}
 }
