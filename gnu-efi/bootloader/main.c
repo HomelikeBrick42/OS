@@ -17,12 +17,18 @@ typedef double f64;
 
 #define cast(type) (type)
 
+typedef enum FramebufferPixelFormat_t {
+	FramebufferPixelFormat_RGBA,
+	FramebufferPixelFormat_BGRA,
+} FramebufferPixelFormat;
+
 typedef struct Framebuffer_t {
 	void* BaseAddress;
 	u64 BufferSize;
 	u64 Width;
 	u64 Height;
 	u64 PixelsPerScanLine;
+	FramebufferPixelFormat PixelFormat;
 } Framebuffer;
 
 Framebuffer gFramebuffer;
@@ -44,6 +50,23 @@ Framebuffer *InitializeGOP() {
 	gFramebuffer.Width = gop->Mode->Info->HorizontalResolution;
 	gFramebuffer.Height = gop->Mode->Info->VerticalResolution;
 	gFramebuffer.PixelsPerScanLine = gop->Mode->Info->PixelsPerScanLine;
+
+	switch (gop->Mode->Info->PixelFormat) {
+		case PixelRedGreenBlueReserved8BitPerColor: {
+			gFramebuffer.PixelFormat = FramebufferPixelFormat_RGBA;
+			Print(L"Pixel Format: RGBA\r\n");
+		} break;
+
+		case PixelBlueGreenRedReserved8BitPerColor: {
+			gFramebuffer.PixelFormat = FramebufferPixelFormat_BGRA;
+			Print(L"Pixel Format: BGRA\r\n");
+		} break;
+
+		default: {
+			Print(L"Unknown pixel format\r\n");
+			return NULL;
+		} break;
+	}
 
 	return &gFramebuffer;
 }
@@ -83,6 +106,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 	EFI_FILE *kernel = LoadFile(NULL, L"kernel.elf", imageHandle, systemTable);
 	if (kernel == NULL) {
 		Print(L"Could not load kernel\r\n");
+		return EFI_NOT_FOUND;
 	} else {
 		Print(L"Kernel loaded successfuly\r\n");
 	}
@@ -144,6 +168,10 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 	Print(L"Kernel loaded\r\n");
 
 	Framebuffer *newBuffer = InitializeGOP();
+	if (newBuffer == NULL) {
+		return EFI_UNSUPPORTED;
+	}
+
 	Print(L"Base: 0x%llx\r\nSize: 0x%llx\r\nWidth: %llu\r\nHeight: %llu\r\nPixelsPerScanLine: %llu\r\n",
 		newBuffer->BaseAddress,
 		newBuffer->BufferSize,
