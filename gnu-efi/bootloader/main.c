@@ -17,6 +17,37 @@ typedef double f64;
 
 #define cast(type) (type)
 
+typedef struct Framebuffer_t {
+	void* BaseAddress;
+	u64 BufferSize;
+	u64 Width;
+	u64 Height;
+	u64 PixelsPerScanLine;
+} Framebuffer;
+
+Framebuffer gFramebuffer;
+
+Framebuffer *InitializeGOP() {
+	EFI_GUID gopGuid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+
+	EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
+	EFI_STATUS status = uefi_call_wrapper(BS->LocateProtocol, 3, &gopGuid, NULL, cast(void**) &gop);
+	if (EFI_ERROR(status)) {
+		Print(L"Unable to locate GOP\r\n");
+		return NULL;
+	} else {
+		Print(L"GOP located\r\n");
+	}
+
+	gFramebuffer.BaseAddress = cast(void*) gop->Mode->FrameBufferBase;
+	gFramebuffer.BufferSize = gop->Mode->FrameBufferSize;
+	gFramebuffer.Width = gop->Mode->Info->HorizontalResolution;
+	gFramebuffer.Height = gop->Mode->Info->VerticalResolution;
+	gFramebuffer.PixelsPerScanLine = gop->Mode->Info->PixelsPerScanLine;
+
+	return &gFramebuffer;
+}
+
 EFI_FILE *LoadFile(EFI_FILE *directory, CHAR16 *path, EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 	EFI_LOADED_IMAGE_PROTOCOL *loadedImage;
 	systemTable->BootServices->HandleProtocol(imageHandle, &gEfiLoadedImageProtocolGuid, cast(void**) &loadedImage);
@@ -112,8 +143,16 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
 
 	Print(L"Kernel loaded\r\n");
 
-	int kernelResult = (cast(__attribute__((sysv_abi)) int (*)(void)) header.e_entry)();
-	Print(L"%d\r\n", kernelResult);
+	Framebuffer *newBuffer = InitializeGOP();
+	Print(L"Base: 0x%llx\r\nSize: 0x%llx\r\nWidth: %llu\r\nHeight: %llu\r\nPixelsPerScanLine: %llu\r\n",
+		newBuffer->BaseAddress,
+		newBuffer->BufferSize,
+		newBuffer->Width,
+		newBuffer->Height,
+		newBuffer->PixelsPerScanLine
+	);
+
+	(cast(__attribute__((sysv_abi)) void (*)(Framebuffer*)) header.e_entry)(newBuffer);
 
 	return EFI_SUCCESS;
 }
