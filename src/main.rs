@@ -1,6 +1,11 @@
 #![no_std]
 #![no_main]
-#![feature(try_trait_v2, arbitrary_self_types, sync_unsafe_cell)]
+#![feature(
+    try_trait_v2,
+    arbitrary_self_types,
+    sync_unsafe_cell,
+    panic_info_message
+)]
 #![allow(
     clippy::too_many_arguments,
     clippy::missing_safety_doc,
@@ -11,11 +16,10 @@
 pub mod efi;
 pub mod framebuffer;
 
+use crate::framebuffer::PixelFormat;
 use core::{arch::asm, cell::SyncUnsafeCell, ffi::c_void, panic::PanicInfo};
 use framebuffer::Framebuffer;
 use utf16_lit::utf16_null;
-
-use crate::framebuffer::PixelFormat;
 
 #[no_mangle]
 pub unsafe extern "system" fn efi_main(
@@ -105,7 +109,75 @@ pub fn get_screen_framebuffer() -> Framebuffer {
 }
 
 #[panic_handler]
-fn panic(_info: &PanicInfo<'_>) -> ! {
+fn panic(info: &PanicInfo<'_>) -> ! {
+    if let Some(message) = info.message() {
+        if let Ok(font) = psf2::Font::new(include_bytes!("./zap-light24.psf")) {
+            use core::fmt::Write;
+
+            struct Writer<Data> {
+                framebuffer: Framebuffer,
+                font: psf2::Font<Data>,
+                cursor_x: usize,
+                cursor_y: usize,
+            }
+
+            impl<Data> Write for Writer<Data>
+            where
+                Data: AsRef<[u8]>,
+            {
+                fn write_str(&mut self, s: &str) -> core::fmt::Result {
+                    for c in s.chars() {
+                        self.write_char(c)?;
+                    }
+                    Ok(())
+                }
+
+                fn write_char(&mut self, c: char) -> core::fmt::Result {
+                    let glyph = if c.is_ascii() {
+                        unsafe { self.font.get_ascii(c as u8).unwrap_unchecked() }
+                    } else {
+                        unsafe { self.font.get_ascii(b'?').unwrap_unchecked() }
+                    };
+
+                    match c {
+                        '\n' => {
+                            self.cursor_x = 0;
+                            self.cursor_y += self.font.height() as usize;
+                        }
+                        '\r' => self.cursor_x = 0,
+                        _ => {
+                            for (y_offset, row) in glyph.into_iter().enumerate() {
+                                for (x_offset, pixel) in row.into_iter().enumerate() {
+                                    if !self.framebuffer.draw_pixel(
+                                        self.cursor_x.saturating_add(x_offset),
+                                        self.cursor_y.saturating_add(y_offset),
+                                        if pixel { (255, 255, 255) } else { (0, 0, 0) },
+                                    ) {
+                                        break;
+                                    }
+                                }
+                            }
+                            self.cursor_x += self.font.width() as usize
+                        }
+                    }
+
+                    Ok(())
+                }
+            }
+
+            let mut writer = Writer {
+                framebuffer: get_screen_framebuffer(),
+                font,
+                cursor_x: 0,
+                cursor_y: 0,
+            };
+            if let Some(location) = info.location() {
+                _ = write!(writer, "{}: ", location);
+            }
+            _ = write!(writer, "{}", message);
+        }
+    }
+
     loop {
         unsafe {
             asm!("hlt");

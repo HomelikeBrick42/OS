@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+psf2 = { version = "0.4.0", default-features = false }
 utf16_lit = "2.0.2"
