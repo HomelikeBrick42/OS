@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-#![feature(try_trait_v2, arbitrary_self_types)]
+#![feature(try_trait_v2, arbitrary_self_types, sync_unsafe_cell)]
 #![allow(
     clippy::too_many_arguments,
     clippy::missing_safety_doc,
@@ -9,9 +9,13 @@
 #![deny(rust_2018_idioms, unsafe_op_in_unsafe_fn)]
 
 pub mod efi;
+pub mod framebuffer;
 
-use core::{arch::asm, ffi::c_void, panic::PanicInfo};
+use core::{arch::asm, cell::SyncUnsafeCell, ffi::c_void, panic::PanicInfo};
+use framebuffer::Framebuffer;
 use utf16_lit::utf16_null;
+
+use crate::framebuffer::PixelFormat;
 
 #[no_mangle]
 pub unsafe extern "system" fn efi_main(
@@ -43,13 +47,11 @@ pub unsafe extern "system" fn efi_main(
             0
         })?;
 
-        #[derive(Clone, Copy)]
-        enum PixelFormat {
-            Rgb,
-            Bgr,
-        }
-
-        let (width, height) = ((*info).width as usize, (*info).height as usize);
+        let (width, height, pixels_per_scanline) = (
+            (*info).width as usize,
+            (*info).height as usize,
+            (*info).pixels_per_scanline as usize,
+        );
         let pixel_format = match (*info).pixel_format {
             efi::Gop::GOT_RGBA8 => PixelFormat::Rgb,
             efi::Gop::GOT_BGRA8 => PixelFormat::Bgr,
@@ -61,36 +63,45 @@ pub unsafe extern "system" fn efi_main(
             }
         };
 
-        #[inline]
-        unsafe fn set_pixel(
-            gop: *mut efi::Gop,
-            x: usize,
-            y: usize,
-            pixel_format: PixelFormat,
-            color: (u8, u8, u8),
-        ) {
-            unsafe {
-                let mode = (*gop).mode;
-                let info = (*mode).info;
-                let pixel = ((*mode).fb_base as *mut [u8; 4])
-                    .add(x + y * (*info).pixels_per_scanline as usize);
-                *pixel = match pixel_format {
-                    PixelFormat::Rgb => [color.0, color.1, color.2, 0x00],
-                    PixelFormat::Bgr => [color.2, color.1, color.0, 0x00],
-                };
-            }
-        }
+        // Sound, because nothing is trying to get a reference to the framebuffer before here
+        FRAMEBUFFER.get().write(Framebuffer::new(
+            (*(*gop).mode).fb_base,
+            width,
+            height,
+            pixels_per_scanline,
+            pixel_format,
+        ));
+    }
 
-        for x in 0..width {
-            for y in 0..height {
-                set_pixel(gop, x, y, pixel_format, (255, 0, 0));
-            }
-        }
+    let framebuffer = get_screen_framebuffer();
+    framebuffer.draw_rect(
+        0,
+        0,
+        framebuffer.width(),
+        framebuffer.height(),
+        (51, 51, 51),
+    );
 
+    unsafe {
         loop {
             asm!("hlt");
         }
     }
+}
+
+static FRAMEBUFFER: SyncUnsafeCell<Framebuffer> = unsafe {
+    SyncUnsafeCell::new(Framebuffer::new(
+        core::ptr::null_mut(),
+        0,
+        0,
+        0,
+        PixelFormat::Rgb,
+    ))
+};
+
+/// this can be called after GOP is initialized, which is basically anytime except at the start of efi_main
+pub fn get_screen_framebuffer() -> Framebuffer {
+    unsafe { *FRAMEBUFFER.get() }
 }
 
 #[panic_handler]

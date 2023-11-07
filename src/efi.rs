@@ -81,6 +81,7 @@ impl core::ops::Try for Status {
 #[macro_export]
 macro_rules! wrap_self_function_pointer {
     ($name:ident($($arg:ident: $typ:ty),* $(,)?) $(-> $ret_typ:ty)?) => {
+        #[inline]
         pub unsafe fn $name(self: *mut Self, $($arg: $typ),*) $(-> $ret_typ)? {
             unsafe { (*self).$name.unwrap_unchecked()(self, $($arg),*) }
         }

@@ -115,6 +115,7 @@ pub struct BootServices {
 #[macro_export]
 macro_rules! wrap_function_pointer {
     ($name:ident($($arg:ident: $typ:ty),* $(,)?) $(-> $ret_typ:ty)?) => {
+        #[inline]
         pub unsafe fn $name(self: *const Self, $($arg: $typ),*) $(-> $ret_typ)? {
             unsafe { (*self).$name.unwrap_unchecked()($($arg),*) }
         }
