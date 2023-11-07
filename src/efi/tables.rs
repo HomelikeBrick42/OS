@@ -112,15 +112,15 @@ pub struct BootServices {
     create_event_ex: Option<unsafe extern "efiapi" fn()>,
 }
 
-impl BootServices {
-    pub unsafe fn locate_protocol(
-        self: *const Self,
-        protocol: *const Guid,
-        registration: *mut c_void,
-        protocol_interface: *mut *mut c_void,
-    ) -> Status {
-        unsafe {
-            (*self).locate_protocol.unwrap_unchecked()(protocol, registration, protocol_interface)
+#[macro_export]
+macro_rules! wrap_function_pointer {
+    ($name:ident($($arg:ident: $typ:ty),* $(,)?) $(-> $ret_typ:ty)?) => {
+        pub unsafe fn $name(self: *const Self, $($arg: $typ),*) $(-> $ret_typ)? {
+            unsafe { (*self).$name.unwrap_unchecked()($($arg),*) }
         }
-    }
+    };
+}
+
+impl BootServices {
+    wrap_function_pointer!(locate_protocol(protocol: *const Guid, registration: *mut c_void, protocol_interface: *mut *mut c_void) -> Status);
 }
