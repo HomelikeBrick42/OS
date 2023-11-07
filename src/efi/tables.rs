@@ -26,7 +26,7 @@ pub struct SystemTable {
     pub stderr_handle: Handle,
     pub std_err: *mut (),
     pub runtime: *mut (),
-    pub boottime: *mut BootServices,
+    pub boottime: *const BootServices,
     pub nr_tables: usize,
     pub tables: *mut (),
 }
