@@ -4,7 +4,8 @@
     try_trait_v2,
     arbitrary_self_types,
     sync_unsafe_cell,
-    panic_info_message
+    panic_info_message,
+    allocator_api
 )]
 #![allow(
     clippy::too_many_arguments,
@@ -13,11 +14,15 @@
 )]
 #![deny(rust_2018_idioms, unsafe_op_in_unsafe_fn)]
 
+extern crate alloc;
+
+pub mod allocator;
 pub mod efi;
 pub mod framebuffer;
 pub mod text_writer;
 
 use crate::framebuffer::PixelFormat;
+use allocator::{LinkedListAllocator, GLOBAL_LINKED_LIST_ALLOCATOR};
 use core::{arch::asm, cell::SyncUnsafeCell, ffi::c_void, fmt::Write, panic::PanicInfo};
 use framebuffer::Framebuffer;
 use text_writer::TextWriter;
@@ -80,8 +85,8 @@ pub unsafe extern "system" fn efi_main(
         ));
     }
 
-    // Exit boot services
-    let (memory_map, memory_map_size, memory_descriptor_size) = unsafe {
+    // Get memory map and exit boot services
+    let (memory_map, memory_descriptor_size, memory_descriptor_count) = unsafe {
         let mut memory_map_size = 0;
         let mut memory_map: *mut efi::MemoryDescriptor = core::ptr::null_mut();
         let mut map_key = 0;
@@ -123,38 +128,14 @@ pub unsafe extern "system" fn efi_main(
             .boottime
             .exit_boot_services(image_handle, map_key)?;
 
-        (memory_map, memory_map_size, descriptor_size)
+        assert_eq!(memory_map_size % descriptor_size, 0);
+        (
+            memory_map,
+            descriptor_size,
+            memory_map_size / descriptor_size,
+        )
     };
 
-    assert_eq!(memory_map_size % memory_descriptor_size, 0);
-
-    let mut available_memory = 0;
-
-    let mut offset = 0;
-    while offset < memory_map_size {
-        let memory_descriptor = unsafe {
-            *memory_map
-                .cast::<u8>()
-                .add(offset)
-                .cast::<efi::MemoryDescriptor>()
-        };
-
-        if let efi::MemoryType::CONVENTIONAL_MEMORY
-        | efi::MemoryType::BOOT_SERVICES_CODE
-        | efi::MemoryType::BOOT_SERVICES_DATA
-        | efi::MemoryType::RUNTIME_SERVICES_CODE
-        | efi::MemoryType::RUNTIME_SERVICES_DATA = memory_descriptor.type_
-        {
-            available_memory += memory_descriptor.number_of_pages * 4096;
-        }
-
-        offset += memory_descriptor_size;
-    }
-
-    main(available_memory)
-}
-
-fn main(available_memory: u64) -> ! {
     let framebuffer = get_screen_framebuffer();
     framebuffer.draw_rect(
         0,
@@ -164,8 +145,19 @@ fn main(available_memory: u64) -> ! {
         (51, 51, 51),
     );
 
-    let font = psf2::Font::new(include_bytes!("./zap-light24.psf")).unwrap();
-    let mut writer = TextWriter {
+    // Create allocator
+    unsafe {
+        GLOBAL_LINKED_LIST_ALLOCATOR
+            .get()
+            .write(LinkedListAllocator::from_efi_memory_map(
+                memory_map,
+                memory_descriptor_size,
+                memory_descriptor_count,
+            ));
+    }
+
+    let font = psf2::Font::new(include_bytes!("./zap-light24.psf") as &[u8]).unwrap();
+    let writer = TextWriter {
         framebuffer,
         font,
         cursor_x: 0,
@@ -176,12 +168,16 @@ fn main(available_memory: u64) -> ! {
         background_color: None,
     };
 
-    writeln!(
-        writer,
-        "There is {}MiB of avaiable memory",
-        available_memory / 1024 / 1024
-    )
-    .unwrap();
+    main(writer)
+}
+
+fn main(mut writer: TextWriter<&'static [u8]>) -> ! {
+    {
+        let a = alloc::boxed::Box::new(5);
+        writeln!(writer, "Allocated value: {a}").unwrap();
+    }
+
+    writeln!(writer, "OS started successfully").unwrap();
 
     loop {
         unsafe {

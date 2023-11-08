@@ -87,6 +87,33 @@ impl MemoryType {
     pub const MAX_MEMORY_TYPE: MemoryType = MemoryType(16);
 }
 
+impl core::fmt::Display for MemoryType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match *self {
+                Self::LOADER_CODE => "EFI_LOADER_CODE",
+                Self::LOADER_DATA => "EFI_LOADER_DATA",
+                Self::BOOT_SERVICES_CODE => "EFI_BOOT_SERVICES_CODE",
+                Self::BOOT_SERVICES_DATA => "EFI_BOOT_SERVICES_DATA",
+                Self::RUNTIME_SERVICES_CODE => "EFI_RUNTIME_SERVICES_CODE",
+                Self::RUNTIME_SERVICES_DATA => "EFI_RUNTIME_SERVICES_DATA",
+                Self::CONVENTIONAL_MEMORY => "EFI_CONVENTIONAL_MEMORY",
+                Self::UNUSABLE_MEMORY => "EFI_UNUSABLE_MEMORY",
+                Self::ACPI_RECLAIM_MEMORY => "EFI_ACPI_RECLAIM_MEMORY",
+                Self::ACPI_MEMORY_NVS => "EFI_ACPI_MEMORY_NVS",
+                Self::MEMORY_MAPPED_IO => "EFI_MEMORY_MAPPED_IO",
+                Self::MEMORY_MAPPED_IOPORT_SPACE => "EFI_MEMORY_MAPPED_IOPORT_SPACE",
+                Self::PAL_CODE => "EFI_PAL_CODE",
+                Self::PERSISTENT_MEMORY => "EFI_PERSISTENT_MEMORY",
+                Self::UNACCEPTED_MEMORY_TYPE => "EFI_UNACCEPTED_MEMORY_TYPE",
+                _ => "EFI_RESERVED_MEMORY_TYPE",
+            }
+        )
+    }
+}
+
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalAddress(pub u64);
