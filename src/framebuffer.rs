@@ -1,3 +1,5 @@
+use core::sync::atomic::{AtomicU32, Ordering};
+
 #[derive(Clone, Copy)]
 pub enum PixelFormat {
     Rgb,
@@ -52,16 +54,16 @@ impl Framebuffer {
         }
 
         unsafe {
-            // hopefully the compiler cant optimise this out
-            core::ptr::write_volatile(
-                self.pixels
-                    .cast::<[u8; 4]>()
-                    .add(x + y * self.pixels_per_scanline)
-                    .cast::<[u8; 3]>(),
+            (*self
+                .pixels
+                .cast::<AtomicU32>()
+                .add(x + y * self.pixels_per_scanline))
+            .store(
                 match self.pixel_format {
-                    PixelFormat::Rgb => [color.0, color.1, color.2],
-                    PixelFormat::Bgr => [color.2, color.1, color.0],
+                    PixelFormat::Rgb => u32::from_ne_bytes([color.0, color.1, color.2, 0x00]),
+                    PixelFormat::Bgr => u32::from_ne_bytes([color.2, color.1, color.0, 0x00]),
                 },
+                Ordering::Relaxed,
             );
         }
 
