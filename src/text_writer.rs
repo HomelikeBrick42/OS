@@ -9,6 +9,8 @@ pub struct TextWriter<Data> {
     pub cursor_x_begin: usize,
     pub cursor_x_end: Option<usize>,
     pub cursor_y: usize,
+    pub foreground_color: (u8, u8, u8),
+    pub background_color: Option<(u8, u8, u8)>,
 }
 
 impl<Data> Write for TextWriter<Data>
@@ -45,12 +47,22 @@ where
                 }
                 for (y_offset, row) in glyph.into_iter().enumerate() {
                     for (x_offset, pixel) in row.into_iter().enumerate() {
-                        if !self.framebuffer.draw_pixel(
-                            self.cursor_x.saturating_add(x_offset),
-                            self.cursor_y.saturating_add(y_offset),
-                            if pixel { (255, 255, 255) } else { (0, 0, 0) },
-                        ) {
-                            break;
+                        if pixel {
+                            if !self.framebuffer.draw_pixel(
+                                self.cursor_x.saturating_add(x_offset),
+                                self.cursor_y.saturating_add(y_offset),
+                                self.foreground_color,
+                            ) {
+                                break;
+                            }
+                        } else if let Some(background_color) = self.background_color {
+                            if !self.framebuffer.draw_pixel(
+                                self.cursor_x.saturating_add(x_offset),
+                                self.cursor_y.saturating_add(y_offset),
+                                background_color,
+                            ) {
+                                break;
+                            }
                         }
                     }
                 }

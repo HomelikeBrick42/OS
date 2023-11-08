@@ -18,7 +18,7 @@ pub mod framebuffer;
 pub mod text_writer;
 
 use crate::framebuffer::PixelFormat;
-use core::{arch::asm, cell::SyncUnsafeCell, ffi::c_void, panic::PanicInfo};
+use core::{arch::asm, cell::SyncUnsafeCell, ffi::c_void, fmt::Write, panic::PanicInfo};
 use framebuffer::Framebuffer;
 use text_writer::TextWriter;
 use utf16_lit::utf16_null;
@@ -88,6 +88,20 @@ pub unsafe extern "system" fn efi_main(
         (51, 51, 51),
     );
 
+    let font = psf2::Font::new(include_bytes!("./zap-light24.psf")).unwrap();
+    let mut writer = TextWriter {
+        framebuffer,
+        font,
+        cursor_x: 0,
+        cursor_x_begin: 0,
+        cursor_x_end: Some(framebuffer.width()),
+        cursor_y: 0,
+        foreground_color: (255, 255, 255),
+        background_color: None,
+    };
+
+    write!(writer, "Hello, World!\r\n").unwrap();
+
     unsafe {
         loop {
             asm!("hlt");
@@ -114,8 +128,6 @@ pub fn get_screen_framebuffer() -> Framebuffer {
 fn panic(info: &PanicInfo<'_>) -> ! {
     if let Some(message) = info.message() {
         if let Ok(font) = psf2::Font::new(include_bytes!("./zap-light24.psf")) {
-            use core::fmt::Write;
-
             let framebuffer = get_screen_framebuffer();
             let mut writer = TextWriter {
                 framebuffer,
@@ -124,6 +136,8 @@ fn panic(info: &PanicInfo<'_>) -> ! {
                 cursor_x_begin: 0,
                 cursor_x_end: Some(framebuffer.width()),
                 cursor_y: 0,
+                foreground_color: (255, 0, 0),
+                background_color: Some((0, 0, 0)),
             };
             if let Some(location) = info.location() {
                 _ = write!(writer, "{}: ", location);
