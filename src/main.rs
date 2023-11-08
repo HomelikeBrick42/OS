@@ -15,10 +15,12 @@
 
 pub mod efi;
 pub mod framebuffer;
+pub mod text_writer;
 
 use crate::framebuffer::PixelFormat;
 use core::{arch::asm, cell::SyncUnsafeCell, ffi::c_void, panic::PanicInfo};
 use framebuffer::Framebuffer;
+use text_writer::TextWriter;
 use utf16_lit::utf16_null;
 
 #[no_mangle]
@@ -114,61 +116,13 @@ fn panic(info: &PanicInfo<'_>) -> ! {
         if let Ok(font) = psf2::Font::new(include_bytes!("./zap-light24.psf")) {
             use core::fmt::Write;
 
-            struct Writer<Data> {
-                framebuffer: Framebuffer,
-                font: psf2::Font<Data>,
-                cursor_x: usize,
-                cursor_y: usize,
-            }
-
-            impl<Data> Write for Writer<Data>
-            where
-                Data: AsRef<[u8]>,
-            {
-                fn write_str(&mut self, s: &str) -> core::fmt::Result {
-                    for c in s.chars() {
-                        self.write_char(c)?;
-                    }
-                    Ok(())
-                }
-
-                fn write_char(&mut self, c: char) -> core::fmt::Result {
-                    let glyph = if c.is_ascii() {
-                        unsafe { self.font.get_ascii(c as u8).unwrap_unchecked() }
-                    } else {
-                        unsafe { self.font.get_ascii(b'?').unwrap_unchecked() }
-                    };
-
-                    match c {
-                        '\n' => {
-                            self.cursor_x = 0;
-                            self.cursor_y += self.font.height() as usize;
-                        }
-                        '\r' => self.cursor_x = 0,
-                        _ => {
-                            for (y_offset, row) in glyph.into_iter().enumerate() {
-                                for (x_offset, pixel) in row.into_iter().enumerate() {
-                                    if !self.framebuffer.draw_pixel(
-                                        self.cursor_x.saturating_add(x_offset),
-                                        self.cursor_y.saturating_add(y_offset),
-                                        if pixel { (255, 255, 255) } else { (0, 0, 0) },
-                                    ) {
-                                        break;
-                                    }
-                                }
-                            }
-                            self.cursor_x += self.font.width() as usize
-                        }
-                    }
-
-                    Ok(())
-                }
-            }
-
-            let mut writer = Writer {
-                framebuffer: get_screen_framebuffer(),
+            let framebuffer = get_screen_framebuffer();
+            let mut writer = TextWriter {
+                framebuffer,
                 font,
                 cursor_x: 0,
+                cursor_x_begin: 0,
+                cursor_x_end: Some(framebuffer.width()),
                 cursor_y: 0,
             };
             if let Some(location) = info.location() {
