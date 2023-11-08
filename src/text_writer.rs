@@ -17,6 +17,7 @@ impl<Data> Write for TextWriter<Data>
 where
     Data: AsRef<[u8]>,
 {
+    #[inline]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         for c in s.chars() {
             self.write_char(c)?;
@@ -24,6 +25,7 @@ where
         Ok(())
     }
 
+    #[inline]
     fn write_char(&mut self, c: char) -> core::fmt::Result {
         let glyph = if c.is_ascii() {
             unsafe { self.font.get_ascii(c as u8).unwrap_unchecked() }

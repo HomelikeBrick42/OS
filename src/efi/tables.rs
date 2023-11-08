@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use core::ffi::c_void;
 
 use crate::{
@@ -62,29 +63,68 @@ impl SimpleTextOutputProtocol {
     wrap_self_function_pointer!(enable_cursor(enable: bool) -> Status);
 }
 
-#[repr(C)]
-pub enum MemoryType {
-    ReservedMemoryType,
-    LoaderCode,
-    LoaderData,
-    BootServicesCode,
-    BootServicesData,
-    RuntimeServicesCode,
-    RuntimeServicesData,
-    ConventionalMemory,
-    UnusableMemory,
-    ACPIReclaimMemory,
-    ACPIMemoryNVS,
-    MemoryMappedIO,
-    MemoryMappedIOPortSpace,
-    PalCode,
-    PersistentMemory,
-    UnacceptedMemoryType,
-    MaxMemoryType,
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct MemoryType(pub i32);
+
+impl MemoryType {
+    pub const RESERVED_MEMORY_TYPE: MemoryType = MemoryType(0);
+    pub const LOADER_CODE: MemoryType = MemoryType(1);
+    pub const LOADER_DATA: MemoryType = MemoryType(2);
+    pub const BOOT_SERVICES_CODE: MemoryType = MemoryType(3);
+    pub const BOOT_SERVICES_DATA: MemoryType = MemoryType(4);
+    pub const RUNTIME_SERVICES_CODE: MemoryType = MemoryType(5);
+    pub const RUNTIME_SERVICES_DATA: MemoryType = MemoryType(6);
+    pub const CONVENTIONAL_MEMORY: MemoryType = MemoryType(7);
+    pub const UNUSABLE_MEMORY: MemoryType = MemoryType(8);
+    pub const ACPI_RECLAIM_MEMORY: MemoryType = MemoryType(9);
+    pub const ACPI_MEMORY_NVS: MemoryType = MemoryType(10);
+    pub const MEMORY_MAPPED_IO: MemoryType = MemoryType(11);
+    pub const MEMORY_MAPPED_IOPORT_SPACE: MemoryType = MemoryType(12);
+    pub const PAL_CODE: MemoryType = MemoryType(13);
+    pub const PERSISTENT_MEMORY: MemoryType = MemoryType(14);
+    pub const UNACCEPTED_MEMORY_TYPE: MemoryType = MemoryType(15);
+    pub const MAX_MEMORY_TYPE: MemoryType = MemoryType(16);
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PhysicalAddress(pub u64);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct VirtualAddress(pub u64);
+
+bitflags! {
+    #[repr(transparent)]
+    #[derive(Clone, Copy)]
+    pub struct Attribute: u64 {
+        const UC = 0x0000000000000001;
+        const WC = 0x0000000000000002;
+        const WT = 0x0000000000000004;
+        const WB = 0x0000000000000008;
+        const UCE = 0x0000000000000010;
+        const WP = 0x0000000000001000;
+        const RP = 0x0000000000002000;
+        const XP = 0x0000000000004000;
+        const NV = 0x0000000000008000;
+        const MORE_RELIABLE = 0x0000000000010000;
+        const RO = 0x0000000000020000;
+        const SP = 0x0000000000040000;
+        const CPU_CRYPTO = 0x0000000000080000;
+        const RUNTIME = 0x8000000000000000;
+    }
 }
 
 #[repr(C)]
-pub struct MemoryDescriptor {}
+#[derive(Clone, Copy)]
+pub struct MemoryDescriptor {
+    pub type_: MemoryType,
+    pub physical_start: PhysicalAddress,
+    pub virtual_start: VirtualAddress,
+    pub number_of_pages: u64,
+    pub attribute: Attribute,
+}
 
 #[repr(C)]
 pub struct BootServices {

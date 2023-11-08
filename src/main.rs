@@ -80,6 +80,81 @@ pub unsafe extern "system" fn efi_main(
         ));
     }
 
+    // Exit boot services
+    let (memory_map, memory_map_size, memory_descriptor_size) = unsafe {
+        let mut memory_map_size = 0;
+        let mut memory_map: *mut efi::MemoryDescriptor = core::ptr::null_mut();
+        let mut map_key = 0;
+        let mut descriptor_size = 0;
+        let mut descriptor_version = 0;
+
+        while {
+            if memory_map_size > 0 {
+                if !memory_map.is_null() {
+                    (*system_table)
+                        .boottime
+                        .free_pool(memory_map as *mut c_void)?;
+                }
+                (*system_table).boottime.allocate_pool(
+                    efi::MemoryType::LOADER_DATA,
+                    memory_map_size,
+                    &mut memory_map as *mut *mut _ as *mut *mut c_void,
+                )?;
+            }
+
+            let status = (*system_table).boottime.get_memory_map(
+                &mut memory_map_size,
+                memory_map,
+                &mut map_key,
+                &mut descriptor_size,
+                &mut descriptor_version,
+            );
+
+            if status == efi::Status::BUFFER_TOO_SMALL {
+                true
+            } else if status == efi::Status::SUCCESS {
+                false
+            } else {
+                return status;
+            }
+        } {}
+
+        (*system_table)
+            .boottime
+            .exit_boot_services(image_handle, map_key)?;
+
+        (memory_map, memory_map_size, descriptor_size)
+    };
+
+    assert_eq!(memory_map_size % memory_descriptor_size, 0);
+
+    let mut available_memory = 0;
+
+    let mut offset = 0;
+    while offset < memory_map_size {
+        let memory_descriptor = unsafe {
+            *memory_map
+                .cast::<u8>()
+                .add(offset)
+                .cast::<efi::MemoryDescriptor>()
+        };
+
+        if let efi::MemoryType::CONVENTIONAL_MEMORY
+        | efi::MemoryType::BOOT_SERVICES_CODE
+        | efi::MemoryType::BOOT_SERVICES_DATA
+        | efi::MemoryType::RUNTIME_SERVICES_CODE
+        | efi::MemoryType::RUNTIME_SERVICES_DATA = memory_descriptor.type_
+        {
+            available_memory += memory_descriptor.number_of_pages * 4096;
+        }
+
+        offset += memory_descriptor_size;
+    }
+
+    main(available_memory)
+}
+
+fn main(available_memory: u64) -> ! {
     let framebuffer = get_screen_framebuffer();
     framebuffer.draw_rect(
         0,
@@ -101,55 +176,15 @@ pub unsafe extern "system" fn efi_main(
         background_color: None,
     };
 
-    // Exit boot services
-    unsafe {
-        let mut memory_map_size = 0;
-        let mut memory_map: *mut efi::MemoryDescriptor = core::ptr::null_mut();
-        let mut map_key = 0;
-        let mut descriptor_size = 0;
-        let mut descriptor_version = 0;
+    writeln!(
+        writer,
+        "There is {}MiB of avaiable memory",
+        available_memory / 1024 / 1024
+    )
+    .unwrap();
 
-        while {
-            if memory_map_size > 0 {
-                if !memory_map.is_null() {
-                    (*system_table)
-                        .boottime
-                        .free_pool(memory_map as *mut c_void)?;
-                }
-                (*system_table).boottime.allocate_pool(
-                    efi::MemoryType::LoaderData,
-                    memory_map_size,
-                    &mut memory_map as *mut *mut _ as *mut *mut c_void,
-                )?;
-            }
-
-            let status = (*system_table).boottime.get_memory_map(
-                &mut memory_map_size,
-                memory_map,
-                &mut map_key,
-                &mut descriptor_size,
-                &mut descriptor_version,
-            );
-
-            if status == efi::Status::BUFFER_TOO_SMALL {
-                true
-            } else if status == efi::Status::SUCCESS {
-                false
-            } else {
-                writeln!(writer, "failed to get memory map: {status}").unwrap();
-                return status;
-            }
-        } {}
-
-        (*system_table)
-            .boottime
-            .exit_boot_services(image_handle, map_key)?;
-    }
-
-    writeln!(writer, "Hello, World!").unwrap();
-
-    unsafe {
-        loop {
+    loop {
+        unsafe {
             asm!("hlt");
         }
     }
