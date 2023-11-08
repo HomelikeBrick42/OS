@@ -25,9 +25,10 @@ use utf16_lit::utf16_null;
 
 #[no_mangle]
 pub unsafe extern "system" fn efi_main(
-    _image_handle: efi::Handle,
+    image_handle: efi::Handle,
     system_table: *mut efi::SystemTable,
 ) -> efi::Status {
+    // Load gop for text rendering
     unsafe {
         let mut gop: *mut efi::Gop = core::ptr::null_mut();
         (*system_table).boottime.locate_protocol(
@@ -100,7 +101,52 @@ pub unsafe extern "system" fn efi_main(
         background_color: None,
     };
 
-    write!(writer, "Hello, World!\r\n").unwrap();
+    // Exit boot services
+    unsafe {
+        let mut memory_map_size = 0;
+        let mut memory_map: *mut efi::MemoryDescriptor = core::ptr::null_mut();
+        let mut map_key = 0;
+        let mut descriptor_size = 0;
+        let mut descriptor_version = 0;
+
+        while {
+            if memory_map_size > 0 {
+                if !memory_map.is_null() {
+                    (*system_table)
+                        .boottime
+                        .free_pool(memory_map as *mut c_void)?;
+                }
+                (*system_table).boottime.allocate_pool(
+                    efi::MemoryType::LoaderData,
+                    memory_map_size,
+                    &mut memory_map as *mut *mut _ as *mut *mut c_void,
+                )?;
+            }
+
+            let status = (*system_table).boottime.get_memory_map(
+                &mut memory_map_size,
+                memory_map,
+                &mut map_key,
+                &mut descriptor_size,
+                &mut descriptor_version,
+            );
+
+            if status == efi::Status::BUFFER_TOO_SMALL {
+                true
+            } else if status == efi::Status::SUCCESS {
+                false
+            } else {
+                writeln!(writer, "failed to get memory map: {status}").unwrap();
+                return status;
+            }
+        } {}
+
+        (*system_table)
+            .boottime
+            .exit_boot_services(image_handle, map_key)?;
+    }
+
+    writeln!(writer, "Hello, World!").unwrap();
 
     unsafe {
         loop {

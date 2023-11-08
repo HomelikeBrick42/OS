@@ -63,15 +63,53 @@ impl SimpleTextOutputProtocol {
 }
 
 #[repr(C)]
+pub enum MemoryType {
+    ReservedMemoryType,
+    LoaderCode,
+    LoaderData,
+    BootServicesCode,
+    BootServicesData,
+    RuntimeServicesCode,
+    RuntimeServicesData,
+    ConventionalMemory,
+    UnusableMemory,
+    ACPIReclaimMemory,
+    ACPIMemoryNVS,
+    MemoryMappedIO,
+    MemoryMappedIOPortSpace,
+    PalCode,
+    PersistentMemory,
+    UnacceptedMemoryType,
+    MaxMemoryType,
+}
+
+#[repr(C)]
+pub struct MemoryDescriptor {}
+
+#[repr(C)]
 pub struct BootServices {
     pub header: TableHeader,
     raise_tpl: Option<unsafe extern "efiapi" fn()>,
     restore_tpl: Option<unsafe extern "efiapi" fn()>,
     allocate_pages: Option<unsafe extern "efiapi" fn()>,
     free_pages: Option<unsafe extern "efiapi" fn()>,
-    get_memory_map: Option<unsafe extern "efiapi" fn()>,
-    allocate_pool: Option<unsafe extern "efiapi" fn()>,
-    free_pool: Option<unsafe extern "efiapi" fn()>,
+    get_memory_map: Option<
+        unsafe extern "efiapi" fn(
+            memory_map_size: *mut usize,
+            memory_map: *mut MemoryDescriptor,
+            map_key: *mut usize,
+            descriptor_size: *mut usize,
+            descriptor_version: *mut u32,
+        ) -> Status,
+    >,
+    allocate_pool: Option<
+        unsafe extern "efiapi" fn(
+            pool_type: MemoryType,
+            size: usize,
+            buffer: *mut *mut c_void,
+        ) -> Status,
+    >,
+    free_pool: Option<unsafe extern "efiapi" fn(buffer: *mut c_void) -> Status>,
     create_event: Option<unsafe extern "efiapi" fn()>,
     set_timer: Option<unsafe extern "efiapi" fn()>,
     wait_for_event: Option<unsafe extern "efiapi" fn()>,
@@ -91,7 +129,8 @@ pub struct BootServices {
     start_image: Option<unsafe extern "efiapi" fn()>,
     exit: Option<unsafe extern "efiapi" fn()>,
     unload_image: Option<unsafe extern "efiapi" fn()>,
-    exit_boot_services: Option<unsafe extern "efiapi" fn()>,
+    exit_boot_services:
+        Option<unsafe extern "efiapi" fn(image_handle: Handle, map_key: usize) -> Status>,
     get_next_monotonic_count: Option<unsafe extern "efiapi" fn()>,
     stall: Option<unsafe extern "efiapi" fn()>,
     set_watchdog_timer: Option<unsafe extern "efiapi" fn()>,
@@ -123,5 +162,15 @@ macro_rules! wrap_function_pointer {
 }
 
 impl BootServices {
+    wrap_function_pointer!(get_memory_map(
+        memory_map_size: *mut usize,
+        memory_map: *mut MemoryDescriptor,
+        map_key: *mut usize,
+        descriptor_size: *mut usize,
+        descriptor_version: *mut u32,
+    ) -> Status);
+    wrap_function_pointer!(exit_boot_services(image_handle: Handle, map_key: usize) -> Status);
+    wrap_function_pointer!(allocate_pool(pool_type: MemoryType, size: usize, buffer: *mut *mut c_void) -> Status);
+    wrap_function_pointer!(free_pool(buffer: *mut c_void) -> Status);
     wrap_function_pointer!(locate_protocol(protocol: *const Guid, registration: *mut c_void, protocol_interface: *mut *mut c_void) -> Status);
 }
