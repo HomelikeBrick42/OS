@@ -101,6 +101,8 @@ impl LinkedListAllocator {
             };
 
             if let efi::MemoryType::CONVENTIONAL_MEMORY = memory_descriptor.type_ {
+                assert_eq!(memory_descriptor.virtual_start.0, 0);
+                assert_ne!(memory_descriptor.physical_start.0, 0);
                 assert_ne!(memory_descriptor.number_of_pages, 0);
 
                 let current = memory_descriptor.physical_start.0 as *mut AllocationHeader;
@@ -158,14 +160,30 @@ unsafe impl Allocator for LinkedListAllocator {
         let mut allocation = *first_allocation;
         while !allocation.is_null() {
             unsafe {
-                if !(*allocation).allocated && (*allocation).size >= layout.size() {
-                    // TODO: alignment and not allocating the entire memory block
+                if !(*allocation).allocated {
+                    let alignment_offset = allocation
+                        .add(1)
+                        .cast::<usize>()
+                        .add(1)
+                        .cast::<u8>()
+                        .align_offset(layout.align());
 
-                    (*allocation).allocated = true;
-                    return Ok(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(
-                        allocation.add(1).cast::<u8>(),
-                        (*allocation).size,
-                    )));
+                    if (*allocation).size
+                        >= alignment_offset + core::mem::size_of::<usize>() + layout.size()
+                    {
+                        let mut start = allocation.add(1).cast::<u8>().add(alignment_offset);
+                        *start.cast::<usize>() = alignment_offset;
+                        start = start.add(core::mem::size_of::<usize>());
+
+                        assert_eq!(start.align_offset(layout.align()), 0);
+
+                        // TODO: dont allocate the entire memory block if possible
+                        (*allocation).allocated = true;
+                        return Ok(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(
+                            start,
+                            (*allocation).size,
+                        )));
+                    }
                 }
                 allocation = (*allocation).next;
             }
@@ -177,15 +195,30 @@ unsafe impl Allocator for LinkedListAllocator {
     unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, _layout: core::alloc::Layout) {
         let _lock = self.first_allocation.lock();
         unsafe {
-            let allocation = ptr.as_ptr().cast::<AllocationHeader>().sub(1);
+            let alignment_offset = *ptr.as_ptr().cast::<usize>().sub(1);
+            let allocation = ptr
+                .as_ptr()
+                .cast::<usize>()
+                .sub(1)
+                .cast::<u8>()
+                .sub(alignment_offset)
+                .cast::<AllocationHeader>()
+                .sub(1);
+
+            assert_eq!(allocation.cast::<u8>().align_offset(_layout.align()), 0);
+
             (*allocation).allocated = false;
-            if allocation.cast::<u8>().add((*allocation).size) == (*allocation).next.cast::<u8>() {
+
+            // Combine with neighboring free allocations
+            if allocation.cast::<u8>().add((*allocation).size) == (*allocation).next.cast::<u8>()
+                && !(*(*allocation).next).allocated
+            {
                 (*allocation).size +=
                     (*(*allocation).next).size + core::mem::size_of::<AllocationHeader>();
                 (*allocation).next = (*(*allocation).next).next;
                 (*(*allocation).next).prev = allocation;
             }
-            if !(*allocation).prev.is_null() {
+            if !(*allocation).prev.is_null() && !(*(*allocation).prev).allocated {
                 let current = (*allocation).prev;
                 if current.cast::<u8>().add((*current).size) == (*current).next.cast::<u8>() {
                     (*current).size +=
