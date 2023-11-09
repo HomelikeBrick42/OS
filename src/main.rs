@@ -168,7 +168,7 @@ pub unsafe extern "system" fn efi_main(
         background_color: None,
     };
 
-    if true {
+    if false {
         {
             unsafe {
                 (*GLOBAL_LINKED_LIST_ALLOCATOR.get())

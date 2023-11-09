@@ -133,7 +133,9 @@ impl LinkedListAllocator {
             let mut current = first;
             while !current.is_null() {
                 unsafe {
-                    if current.cast::<u8>().add((*current).size) == (*current).next.cast::<u8>() {
+                    if current.add(1).cast::<u8>().add((*current).size)
+                        == (*current).next.cast::<u8>()
+                    {
                         (*current).size +=
                             (*(*current).next).size + core::mem::size_of::<AllocationHeader>();
                         (*current).next = (*(*current).next).next;
