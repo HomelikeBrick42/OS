@@ -201,9 +201,8 @@ pub unsafe extern "system" fn efi_main(
             size: (core::mem::size_of::<gdt::GDT>() - 1) as u16,
             offset: &gdt::DEFAULT_GDT as *const gdt::GDT as u64,
         };
-        asm!("
-call {load_gdt}
-",
+        asm!(
+            "call {load_gdt}",
             load_gdt = sym load_gdt,
             inout("ax") &descriptor as *const gdt::Descriptor => _,
         );
