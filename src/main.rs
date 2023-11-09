@@ -5,7 +5,8 @@
     arbitrary_self_types,
     sync_unsafe_cell,
     panic_info_message,
-    allocator_api
+    allocator_api,
+    naked_functions
 )]
 #![allow(
     clippy::too_many_arguments,
@@ -19,12 +20,14 @@ extern crate alloc;
 pub mod allocator;
 pub mod efi;
 pub mod framebuffer;
+pub mod gdt;
 pub mod text_writer;
 
 use crate::framebuffer::PixelFormat;
 use allocator::{LinkedListAllocator, GLOBAL_LINKED_LIST_ALLOCATOR};
 use core::{arch::asm, cell::SyncUnsafeCell, ffi::c_void, fmt::Write, panic::PanicInfo};
 use framebuffer::Framebuffer;
+use gdt::load_gdt;
 use text_writer::TextWriter;
 use utf16_lit::utf16_null;
 
@@ -191,6 +194,19 @@ pub unsafe extern "system" fn efi_main(
                 .print_allocation_headers(&mut writer)
                 .unwrap();
         }
+    }
+
+    unsafe {
+        let descriptor = gdt::Descriptor {
+            size: (core::mem::size_of::<gdt::GDT>() - 1) as u16,
+            offset: &gdt::DEFAULT_GDT as *const gdt::GDT as u64,
+        };
+        asm!("
+call {load_gdt}
+",
+            load_gdt = sym load_gdt,
+            inout("ax") &descriptor as *const gdt::Descriptor => _,
+        );
     }
 
     main(writer)
