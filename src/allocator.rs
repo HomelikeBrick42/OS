@@ -1,6 +1,7 @@
 use core::{
     alloc::{Allocator, GlobalAlloc, Layout},
     cell::SyncUnsafeCell,
+    fmt::Write,
     ptr::NonNull,
 };
 
@@ -148,6 +149,30 @@ impl LinkedListAllocator {
             first_allocation: spin::Mutex::new(first),
         }
     }
+
+    pub fn print_allocation_headers(&self, mut f: impl Write) -> core::fmt::Result {
+        writeln!(
+            f,
+            "Size of allocation header: {}",
+            core::mem::size_of::<AllocationHeader>()
+        )?;
+
+        let first_allocation = self.first_allocation.lock();
+        let mut allocation = *first_allocation;
+        while !allocation.is_null() {
+            unsafe {
+                writeln!(
+                    f,
+                    "{} {} {}",
+                    allocation as usize,
+                    { (*allocation).size },
+                    { (*allocation).allocated }
+                )?;
+                allocation = (*allocation).next;
+            }
+        }
+        Ok(())
+    }
 }
 
 unsafe impl Allocator for LinkedListAllocator {
@@ -172,16 +197,41 @@ unsafe impl Allocator for LinkedListAllocator {
                         >= alignment_offset + core::mem::size_of::<usize>() + layout.size()
                     {
                         let mut start = allocation.add(1).cast::<u8>().add(alignment_offset);
-                        *start.cast::<usize>() = alignment_offset;
+                        start.cast::<usize>().write_unaligned(alignment_offset);
                         start = start.add(core::mem::size_of::<usize>());
 
                         assert_eq!(start.align_offset(layout.align()), 0);
 
-                        // TODO: dont allocate the entire memory block if possible
                         (*allocation).allocated = true;
+
+                        // if there is extra space, setup a new allocation
+                        if (*allocation).size
+                            > alignment_offset
+                                + core::mem::size_of::<usize>()
+                                + layout.size()
+                                + core::mem::size_of::<AllocationHeader>()
+                        {
+                            let new_allocation_header =
+                                start.add(layout.size()).cast::<AllocationHeader>();
+                            new_allocation_header.write(AllocationHeader {
+                                next: (*allocation).next,
+                                prev: allocation,
+                                size: (*allocation).size
+                                    - (alignment_offset
+                                        + core::mem::size_of::<usize>()
+                                        + layout.size()
+                                        + core::mem::size_of::<AllocationHeader>()),
+                                allocated: false,
+                            });
+                            (*(*allocation).next).prev = new_allocation_header;
+                            (*allocation).next = new_allocation_header;
+                            (*allocation).size -= (*new_allocation_header).size
+                                + core::mem::size_of::<AllocationHeader>();
+                        }
+
                         return Ok(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(
                             start,
-                            (*allocation).size,
+                            (*allocation).size - alignment_offset - core::mem::size_of::<usize>(),
                         )));
                     }
                 }
@@ -195,7 +245,7 @@ unsafe impl Allocator for LinkedListAllocator {
     unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, _layout: core::alloc::Layout) {
         let _lock = self.first_allocation.lock();
         unsafe {
-            let alignment_offset = *ptr.as_ptr().cast::<usize>().sub(1);
+            let alignment_offset = ptr.as_ptr().cast::<usize>().sub(1).read_unaligned();
             let allocation = ptr
                 .as_ptr()
                 .cast::<usize>()
@@ -210,7 +260,8 @@ unsafe impl Allocator for LinkedListAllocator {
             (*allocation).allocated = false;
 
             // Combine with neighboring free allocations
-            if allocation.cast::<u8>().add((*allocation).size) == (*allocation).next.cast::<u8>()
+            if allocation.add(1).cast::<u8>().add((*allocation).size)
+                == (*allocation).next.cast::<u8>()
                 && !(*(*allocation).next).allocated
             {
                 (*allocation).size +=
@@ -220,7 +271,8 @@ unsafe impl Allocator for LinkedListAllocator {
             }
             if !(*allocation).prev.is_null() && !(*(*allocation).prev).allocated {
                 let current = (*allocation).prev;
-                if current.cast::<u8>().add((*current).size) == (*current).next.cast::<u8>() {
+                if current.add(1).cast::<u8>().add((*current).size) == (*current).next.cast::<u8>()
+                {
                     (*current).size +=
                         (*(*current).next).size + core::mem::size_of::<AllocationHeader>();
                     (*current).next = (*(*current).next).next;

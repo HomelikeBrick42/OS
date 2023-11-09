@@ -157,7 +157,7 @@ pub unsafe extern "system" fn efi_main(
     }
 
     let font = psf2::Font::new(include_bytes!("./zap-light24.psf") as &[u8]).unwrap();
-    let writer = TextWriter {
+    let mut writer = TextWriter {
         framebuffer,
         font,
         cursor_x: 0,
@@ -168,15 +168,35 @@ pub unsafe extern "system" fn efi_main(
         background_color: None,
     };
 
+    if true {
+        {
+            unsafe {
+                (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
+                    .print_allocation_headers(&mut writer)
+                    .unwrap();
+            }
+
+            let a = alloc::boxed::Box::new(5);
+            writeln!(writer, "Allocated value: {a}").unwrap();
+
+            unsafe {
+                (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
+                    .print_allocation_headers(&mut writer)
+                    .unwrap();
+            }
+        }
+
+        unsafe {
+            (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
+                .print_allocation_headers(&mut writer)
+                .unwrap();
+        }
+    }
+
     main(writer)
 }
 
 fn main(mut writer: TextWriter<&'static [u8]>) -> ! {
-    {
-        let a = alloc::boxed::Box::new(5);
-        writeln!(writer, "Allocated value: {a}").unwrap();
-    }
-
     writeln!(writer, "OS started successfully").unwrap();
 
     loop {
