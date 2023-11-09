@@ -1,6 +1,5 @@
 use core::{
     alloc::{Allocator, GlobalAlloc, Layout},
-    cell::SyncUnsafeCell,
     fmt::Write,
     ptr::NonNull,
 };
@@ -15,7 +14,9 @@ static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 unsafe impl GlobalAlloc for GlobalAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         unsafe {
-            (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
+            GLOBAL_LINKED_LIST_ALLOCATOR
+                .get()
+                .expect("this can only be called once the global allocator is initialized")
                 .allocate(layout)
                 .map_or(core::ptr::null_mut(), |mut mem| mem.as_mut().as_mut_ptr())
         }
@@ -23,13 +24,18 @@ unsafe impl GlobalAlloc for GlobalAllocator {
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
         unsafe {
-            (*GLOBAL_LINKED_LIST_ALLOCATOR.get()).deallocate(NonNull::new_unchecked(ptr), layout)
+            GLOBAL_LINKED_LIST_ALLOCATOR
+                .get()
+                .expect("this can only be called once the global allocator is initialized")
+                .deallocate(NonNull::new_unchecked(ptr), layout)
         }
     }
 
     unsafe fn alloc_zeroed(&self, layout: core::alloc::Layout) -> *mut u8 {
         unsafe {
-            (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
+            GLOBAL_LINKED_LIST_ALLOCATOR
+                .get()
+                .expect("this can only be called once the global allocator is initialized")
                 .allocate_zeroed(layout)
                 .map_or(core::ptr::null_mut(), |mut mem| mem.as_mut().as_mut_ptr())
         }
@@ -43,7 +49,9 @@ unsafe impl GlobalAlloc for GlobalAllocator {
     ) -> *mut u8 {
         match new_size.cmp(&layout.size()) {
             core::cmp::Ordering::Less => unsafe {
-                (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
+                GLOBAL_LINKED_LIST_ALLOCATOR
+                    .get()
+                    .expect("this can only be called once the global allocator is initialized")
                     .shrink(
                         NonNull::new_unchecked(ptr),
                         layout,
@@ -53,7 +61,9 @@ unsafe impl GlobalAlloc for GlobalAllocator {
             },
             core::cmp::Ordering::Equal => ptr,
             core::cmp::Ordering::Greater => unsafe {
-                (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
+                GLOBAL_LINKED_LIST_ALLOCATOR
+                    .get()
+                    .expect("this can only be called once the global allocator is initialized")
                     .grow(
                         NonNull::new_unchecked(ptr),
                         layout,
@@ -65,10 +75,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
     }
 }
 
-pub(super) static GLOBAL_LINKED_LIST_ALLOCATOR: SyncUnsafeCell<LinkedListAllocator> =
-    SyncUnsafeCell::new(LinkedListAllocator {
-        first_allocation: spin::Mutex::new(core::ptr::null_mut()),
-    });
+pub static GLOBAL_LINKED_LIST_ALLOCATOR: spin::Once<LinkedListAllocator> = spin::Once::new();
 
 #[repr(C, packed)]
 struct AllocationHeader {

@@ -3,7 +3,6 @@
 #![feature(
     try_trait_v2,
     arbitrary_self_types,
-    sync_unsafe_cell,
     panic_info_message,
     allocator_api,
     naked_functions
@@ -25,7 +24,7 @@ pub mod text_writer;
 
 use crate::framebuffer::PixelFormat;
 use allocator::{LinkedListAllocator, GLOBAL_LINKED_LIST_ALLOCATOR};
-use core::{arch::asm, cell::SyncUnsafeCell, ffi::c_void, fmt::Write, panic::PanicInfo};
+use core::{arch::asm, ffi::c_void, fmt::Write, panic::PanicInfo};
 use framebuffer::Framebuffer;
 use gdt::load_gdt;
 use text_writer::TextWriter;
@@ -78,14 +77,15 @@ pub unsafe extern "system" fn efi_main(
             }
         };
 
-        // Sound, because nothing is trying to get a reference to the framebuffer before here
-        FRAMEBUFFER.get().write(Framebuffer::new(
-            (*(*gop).mode).fb_base,
-            width,
-            height,
-            pixels_per_scanline,
-            pixel_format,
-        ));
+        FRAMEBUFFER.call_once(|| {
+            Framebuffer::new(
+                (*(*gop).mode).fb_base,
+                width,
+                height,
+                pixels_per_scanline,
+                pixel_format,
+            )
+        });
     }
 
     // Get memory map and exit boot services
@@ -149,15 +149,13 @@ pub unsafe extern "system" fn efi_main(
     );
 
     // Create allocator
-    unsafe {
-        GLOBAL_LINKED_LIST_ALLOCATOR
-            .get()
-            .write(LinkedListAllocator::from_efi_memory_map(
-                memory_map,
-                memory_descriptor_size,
-                memory_descriptor_count,
-            ));
-    }
+    GLOBAL_LINKED_LIST_ALLOCATOR.call_once(|| unsafe {
+        LinkedListAllocator::from_efi_memory_map(
+            memory_map,
+            memory_descriptor_size,
+            memory_descriptor_count,
+        )
+    });
 
     let font = psf2::Font::new(include_bytes!("./zap-light24.psf") as &[u8]).unwrap();
     let mut writer = TextWriter {
@@ -173,27 +171,27 @@ pub unsafe extern "system" fn efi_main(
 
     if false {
         {
-            unsafe {
-                (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
-                    .print_allocation_headers(&mut writer)
-                    .unwrap();
-            }
+            GLOBAL_LINKED_LIST_ALLOCATOR
+                .get()
+                .unwrap()
+                .print_allocation_headers(&mut writer)
+                .unwrap();
 
             let a = alloc::boxed::Box::new(5);
             writeln!(writer, "Allocated value: {a}").unwrap();
 
-            unsafe {
-                (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
-                    .print_allocation_headers(&mut writer)
-                    .unwrap();
-            }
-        }
-
-        unsafe {
-            (*GLOBAL_LINKED_LIST_ALLOCATOR.get())
+            GLOBAL_LINKED_LIST_ALLOCATOR
+                .get()
+                .unwrap()
                 .print_allocation_headers(&mut writer)
                 .unwrap();
         }
+
+        GLOBAL_LINKED_LIST_ALLOCATOR
+            .get()
+            .unwrap()
+            .print_allocation_headers(&mut writer)
+            .unwrap();
     }
 
     unsafe {
@@ -221,19 +219,13 @@ fn main(mut writer: TextWriter<&'static [u8]>) -> ! {
     }
 }
 
-static FRAMEBUFFER: SyncUnsafeCell<Framebuffer> = unsafe {
-    SyncUnsafeCell::new(Framebuffer::new(
-        core::ptr::null_mut(),
-        0,
-        0,
-        0,
-        PixelFormat::Rgb,
-    ))
-};
+static FRAMEBUFFER: spin::Once<Framebuffer> = spin::Once::new();
 
-/// this can be called after GOP is initialized, which is basically anytime except at the start of efi_main
 pub fn get_screen_framebuffer() -> Framebuffer {
-    unsafe { *FRAMEBUFFER.get() }
+    FRAMEBUFFER
+        .get()
+        .copied()
+        .expect("this can only be called once the kernel is initialized")
 }
 
 #[panic_handler]
