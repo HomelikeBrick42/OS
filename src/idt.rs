@@ -1,5 +1,4 @@
 pub const TA_INTERRUPT_GATE: u8 = 0b1000_1110;
-pub const TA_CALL_GATE: u8 = 0b1000_1100;
 pub const TA_TRAP_GATE: u8 = 0b1000_1111;
 
 #[repr(C, packed)]

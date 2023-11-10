@@ -203,34 +203,6 @@ pub unsafe extern "system" fn efi_main(
             .unwrap();
     }
 
-    #[allow(clippy::fn_to_numeric_cast)]
-    unsafe {
-        static IDTR: spin::Once<idt::Descriptor> = spin::Once::new();
-        let idtr = IDTR.call_once(|| idt::Descriptor {
-            limit: 0x0FFF,
-            offset: Global
-                .allocate_zeroed(Layout::from_size_align(4096, 4096).unwrap())
-                .unwrap()
-                .as_ptr() as *mut u8 as u64,
-        });
-
-        (idtr.offset as *mut idt::DescriptorEntry).add(0xE).write({
-            let mut descriptor = idt::DescriptorEntry {
-                offset0: 0,
-                selector: 0x08,
-                ist: 0x00,
-                type_attr: idt::TA_INTERRUPT_GATE,
-                offset1: 0,
-                offset2: 0,
-                ignore: 0,
-            };
-            descriptor.set_offset(interrupts::page_fault_thunk as unsafe extern "C" fn() as u64);
-            descriptor
-        });
-
-        asm!("lidt [rax]", in("rax") idtr as *const idt::Descriptor)
-    }
-
     unsafe {
         let descriptor = gdt::Descriptor {
             size: (core::mem::size_of::<gdt::GDT>() - 1) as u16,
@@ -243,12 +215,54 @@ pub unsafe extern "system" fn efi_main(
         );
     }
 
+    #[allow(clippy::fn_to_numeric_cast)]
+    unsafe {
+        static IDTR: spin::Once<idt::Descriptor> = spin::Once::new();
+        let idtr = IDTR.call_once(|| idt::Descriptor {
+            limit: 0x0FFF,
+            offset: Global
+                .allocate_zeroed(Layout::from_size_align(4096, 4096).unwrap())
+                .unwrap()
+                .as_ptr() as *mut u8 as u64,
+        });
+
+        macro_rules! interrupt {
+            ($handler:path, $offset:literal) => {
+                (idtr.offset as *mut idt::DescriptorEntry)
+                    .add($offset)
+                    .write({
+                        let mut descriptor = idt::DescriptorEntry {
+                            offset0: 0,
+                            selector: 0x08,
+                            ist: 0x00,
+                            type_attr: idt::TA_INTERRUPT_GATE,
+                            offset1: 0,
+                            offset2: 0,
+                            ignore: 0,
+                        };
+                        descriptor.set_offset($handler as unsafe extern "C" fn() as u64);
+                        descriptor
+                    });
+            };
+        }
+
+        interrupt!(interrupts::double_fault_handler, 0x8);
+        interrupt!(interrupts::general_protection_fault_handler, 0xD);
+        interrupt!(interrupts::page_fault_handler, 0xE);
+
+        asm!("lidt [rax]", in("rax") idtr as *const idt::Descriptor)
+    }
+
     main(writer)
 }
 
 fn main(mut writer: TextWriter<&'static [u8]>) -> ! {
     writeln!(writer, "OS started successfully").unwrap();
 
+    halt()
+}
+
+pub fn halt() -> ! {
     loop {
         unsafe {
             asm!("hlt");
