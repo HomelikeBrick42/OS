@@ -20,11 +20,20 @@ pub mod allocator;
 pub mod efi;
 pub mod framebuffer;
 pub mod gdt;
+pub mod idt;
+pub mod interrupts;
 pub mod text_writer;
 
 use crate::framebuffer::PixelFormat;
+use alloc::alloc::Global;
 use allocator::{LinkedListAllocator, GLOBAL_LINKED_LIST_ALLOCATOR};
-use core::{arch::asm, ffi::c_void, fmt::Write, panic::PanicInfo};
+use core::{
+    alloc::{Allocator, Layout},
+    arch::asm,
+    ffi::c_void,
+    fmt::Write,
+    panic::PanicInfo,
+};
 use framebuffer::Framebuffer;
 use gdt::load_gdt;
 use text_writer::TextWriter;
@@ -192,6 +201,34 @@ pub unsafe extern "system" fn efi_main(
             .unwrap()
             .print_allocation_headers(&mut writer)
             .unwrap();
+    }
+
+    #[allow(clippy::fn_to_numeric_cast)]
+    unsafe {
+        static IDTR: spin::Once<idt::Descriptor> = spin::Once::new();
+        let idtr = IDTR.call_once(|| idt::Descriptor {
+            limit: 0x0FFF,
+            offset: Global
+                .allocate_zeroed(Layout::from_size_align(4096, 4096).unwrap())
+                .unwrap()
+                .as_ptr() as *mut u8 as u64,
+        });
+
+        (idtr.offset as *mut idt::DescriptorEntry).add(0xE).write({
+            let mut descriptor = idt::DescriptorEntry {
+                offset0: 0,
+                selector: 0x08,
+                ist: 0x00,
+                type_attr: idt::TA_INTERRUPT_GATE,
+                offset1: 0,
+                offset2: 0,
+                ignore: 0,
+            };
+            descriptor.set_offset(interrupts::page_fault_thunk as unsafe extern "C" fn() as u64);
+            descriptor
+        });
+
+        asm!("lidt [rax]", in("rax") idtr as *const idt::Descriptor)
     }
 
     unsafe {
