@@ -22,9 +22,13 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod idt;
 pub mod interrupts;
+pub mod io;
 pub mod text_writer;
 
-use crate::framebuffer::PixelFormat;
+use crate::{
+    framebuffer::PixelFormat,
+    io::{output_byte, remap_pic, PIC1_DATA_PORT, PIC2_DATA_PORT},
+};
 use alloc::alloc::Global;
 use allocator::{LinkedListAllocator, GLOBAL_LINKED_LIST_ALLOCATOR};
 use core::{
@@ -211,7 +215,7 @@ pub unsafe extern "system" fn efi_main(
         asm!(
             "call {load_gdt}",
             load_gdt = sym load_gdt,
-            inout("ax") &descriptor as *const gdt::Descriptor => _,
+            inout("rax") &descriptor as *const gdt::Descriptor => _,
         );
     }
 
@@ -249,8 +253,16 @@ pub unsafe extern "system" fn efi_main(
         interrupt!(interrupts::double_fault_handler, 0x8);
         interrupt!(interrupts::general_protection_fault_handler, 0xD);
         interrupt!(interrupts::page_fault_handler, 0xE);
+        interrupt!(interrupts::keyboard_handler, 0x21);
 
-        asm!("lidt [rax]", in("rax") idtr as *const idt::Descriptor)
+        asm!("lidt [rax]", in("rax") idtr as *const idt::Descriptor);
+
+        remap_pic();
+
+        output_byte(PIC1_DATA_PORT, 0b1111_1101);
+        output_byte(PIC2_DATA_PORT, 0b1111_1111);
+
+        asm!("sti");
     }
 
     main(writer)
