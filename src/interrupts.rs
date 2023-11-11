@@ -1,11 +1,7 @@
 use core::arch::asm;
 use core::fmt::Write;
 
-use crate::{
-    get_screen_framebuffer, halt,
-    io::{input_byte, output_byte, PIC1_COMMAND_PORT, PIC2_COMMAND_PORT, PIC_EOI},
-    text_writer::TextWriter,
-};
+use crate::{get_screen_framebuffer, halt, text_writer::TextWriter};
 
 macro_rules! interrupt_handler {
     ($name:ident, $to_call:path) => {
@@ -69,20 +65,7 @@ unsafe extern "win64" fn general_protection() {
     halt()
 }
 
-interrupt_handler!(keyboard_handler, keyboard);
-unsafe extern "win64" fn keyboard() {
-    unsafe {
-        let scancode = input_byte(0x60);
-
-        _ = try_with_writer((255, 255, 255), Some((0, 0, 0)), |w| {
-            write!(w, "Keyboard input: {scancode}                      ")
-        });
-
-        // reset/end pic interrupt
-        output_byte(PIC2_COMMAND_PORT, PIC_EOI);
-        output_byte(PIC1_COMMAND_PORT, PIC_EOI);
-    }
-}
+interrupt_handler!(keyboard_handler, crate::io::keyboard_interrupt);
 
 fn try_with_writer(
     foreground_color: (u8, u8, u8),

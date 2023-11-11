@@ -40,6 +40,7 @@ use core::{
 };
 use framebuffer::Framebuffer;
 use gdt::load_gdt;
+use io::KEYBOARD_EVENTS;
 use text_writer::TextWriter;
 use utf16_lit::utf16_null;
 
@@ -271,7 +272,15 @@ pub unsafe extern "system" fn efi_main(
 fn main(mut writer: TextWriter<&'static [u8]>) -> ! {
     writeln!(writer, "OS started successfully").unwrap();
 
-    halt()
+    loop {
+        unsafe {
+            asm!("hlt");
+        }
+
+        while let Some(event) = KEYBOARD_EVENTS.pop() {
+            writeln!(writer, "{} {}", event.key, event.action).unwrap();
+        }
+    }
 }
 
 pub fn halt() -> ! {
@@ -313,9 +322,5 @@ fn panic(info: &PanicInfo<'_>) -> ! {
         }
     }
 
-    loop {
-        unsafe {
-            asm!("hlt");
-        }
-    }
+    halt()
 }
