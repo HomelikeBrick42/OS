@@ -5,8 +5,20 @@ edition = "2021"
 
 [dependencies]
 bitflags = "2.4.1"
-crossbeam = { version = "0.8.2", default-features = false, features = ["alloc", "crossbeam-queue"] }
+crossbeam = { version = "0.8.2", default-features = false, features = [
+    "alloc",
+    "crossbeam-queue",
+] }
 derive_more = "0.99.17"
 psf2 = { version = "0.4.0", default-features = false }
 spin = "0.9.8"
 utf16_lit = "2.0.2"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+strip = true
+lto = true
+codegen-units = 1
