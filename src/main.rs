@@ -17,17 +17,21 @@
 extern crate alloc;
 
 pub mod allocator;
+pub mod drivers;
 pub mod efi;
 pub mod framebuffer;
 pub mod gdt;
 pub mod idt;
 pub mod interrupts;
 pub mod io;
+pub mod logging;
 pub mod text_writer;
 
 use crate::{
+    drivers::keyboard::{remap_pic, PIC1_DATA_PORT, PIC2_DATA_PORT},
     framebuffer::PixelFormat,
-    io::{output_byte, remap_pic, PIC1_DATA_PORT, PIC2_DATA_PORT},
+    interrupts::enable_interrupts,
+    io::output_byte,
 };
 use alloc::alloc::Global;
 use allocator::{LinkedListAllocator, GLOBAL_LINKED_LIST_ALLOCATOR};
@@ -35,12 +39,13 @@ use core::{
     alloc::{Allocator, Layout},
     arch::asm,
     ffi::c_void,
-    fmt::Write,
     panic::PanicInfo,
+    sync::atomic::AtomicUsize,
 };
+use drivers::keyboard::KEYBOARD_EVENTS;
 use framebuffer::Framebuffer;
 use gdt::load_gdt;
-use io::KEYBOARD_EVENTS;
+use logging::init_text_writer;
 use text_writer::TextWriter;
 use utf16_lit::utf16_null;
 
@@ -162,6 +167,23 @@ pub unsafe extern "system" fn efi_main(
         (51, 51, 51),
     );
 
+    unsafe {
+        init_text_writer(TextWriter {
+            framebuffer,
+            font: if let Ok(font) = psf2::Font::new(include_bytes!("./zap-light24.psf") as &[u8]) {
+                font
+            } else {
+                return efi::Status::ABORTED;
+            },
+            cursor_x: AtomicUsize::new(0),
+            cursor_x_begin: 0,
+            cursor_x_end: Some(framebuffer.width()),
+            cursor_y: AtomicUsize::new(0),
+            foreground_color: (255, 255, 255),
+            background_color: None,
+        });
+    }
+
     // Create allocator
     GLOBAL_LINKED_LIST_ALLOCATOR.call_once(|| unsafe {
         LinkedListAllocator::from_efi_memory_map(
@@ -171,41 +193,26 @@ pub unsafe extern "system" fn efi_main(
         )
     });
 
-    let font = psf2::Font::new(include_bytes!("./zap-light24.psf") as &[u8]).unwrap();
-    let mut writer = TextWriter {
-        framebuffer,
-        font,
-        cursor_x: 0,
-        cursor_x_begin: 0,
-        cursor_x_end: Some(framebuffer.width()),
-        cursor_y: 0,
-        foreground_color: (255, 255, 255),
-        background_color: None,
-    };
-
     if false {
         {
             GLOBAL_LINKED_LIST_ALLOCATOR
                 .get()
                 .unwrap()
-                .print_allocation_headers(&mut writer)
-                .unwrap();
+                .print_allocation_headers();
 
             let a = alloc::boxed::Box::new(5);
-            writeln!(writer, "Allocated value: {a}").unwrap();
+            println!("Allocated value: {a}");
 
             GLOBAL_LINKED_LIST_ALLOCATOR
                 .get()
                 .unwrap()
-                .print_allocation_headers(&mut writer)
-                .unwrap();
+                .print_allocation_headers();
         }
 
         GLOBAL_LINKED_LIST_ALLOCATOR
             .get()
             .unwrap()
-            .print_allocation_headers(&mut writer)
-            .unwrap();
+            .print_allocation_headers();
     }
 
     unsafe {
@@ -254,7 +261,7 @@ pub unsafe extern "system" fn efi_main(
         interrupt!(interrupts::double_fault_handler, 0x8);
         interrupt!(interrupts::general_protection_fault_handler, 0xD);
         interrupt!(interrupts::page_fault_handler, 0xE);
-        interrupt!(interrupts::keyboard_handler, 0x21);
+        interrupt!(drivers::keyboard::keyboard_handler, 0x21);
 
         asm!("lidt [rax]", in("rax") idtr as *const idt::Descriptor);
 
@@ -263,14 +270,14 @@ pub unsafe extern "system" fn efi_main(
         output_byte(PIC1_DATA_PORT, 0b1111_1101);
         output_byte(PIC2_DATA_PORT, 0b1111_1111);
 
-        asm!("sti");
+        enable_interrupts();
     }
 
-    main(writer)
+    main()
 }
 
-fn main(mut writer: TextWriter<&'static [u8]>) -> ! {
-    writeln!(writer, "OS started successfully").unwrap();
+fn main() -> ! {
+    println!("OS started successfully");
 
     loop {
         unsafe {
@@ -278,7 +285,7 @@ fn main(mut writer: TextWriter<&'static [u8]>) -> ! {
         }
 
         while let Some(event) = KEYBOARD_EVENTS.pop() {
-            writeln!(writer, "{} {}", event.key, event.action).unwrap();
+            println!("{} {}", event.key, event.action);
         }
     }
 }
@@ -303,24 +310,10 @@ pub fn get_screen_framebuffer() -> Framebuffer {
 #[panic_handler]
 fn panic(info: &PanicInfo<'_>) -> ! {
     if let Some(message) = info.message() {
-        if let Ok(font) = psf2::Font::new(include_bytes!("./zap-light24.psf")) {
-            let framebuffer = get_screen_framebuffer();
-            let mut writer = TextWriter {
-                framebuffer,
-                font,
-                cursor_x: 0,
-                cursor_x_begin: 0,
-                cursor_x_end: Some(framebuffer.width()),
-                cursor_y: 0,
-                foreground_color: (255, 0, 0),
-                background_color: Some((0, 0, 0)),
-            };
-            if let Some(location) = info.location() {
-                _ = write!(writer, "{}: ", location);
-            }
-            _ = write!(writer, "{}", message);
+        if let Some(location) = info.location() {
+            print!("{}: ", location);
         }
+        println!("{}", message);
     }
-
     halt()
 }

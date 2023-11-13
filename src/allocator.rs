@@ -1,10 +1,9 @@
 use core::{
     alloc::{Allocator, GlobalAlloc, Layout},
-    fmt::Write,
     ptr::NonNull,
 };
 
-use crate::efi;
+use crate::{efi, println};
 
 struct GlobalAllocator;
 
@@ -159,28 +158,22 @@ impl LinkedListAllocator {
         }
     }
 
-    pub fn print_allocation_headers(&self, mut f: impl Write) -> core::fmt::Result {
-        writeln!(
-            f,
+    pub fn print_allocation_headers(&self) {
+        println!(
             "Size of allocation header: {}",
-            core::mem::size_of::<AllocationHeader>()
-        )?;
+            core::mem::size_of::<AllocationHeader>(),
+        );
 
         let first_allocation = self.first_allocation.lock();
         let mut allocation = *first_allocation;
         while !allocation.is_null() {
             unsafe {
-                writeln!(
-                    f,
-                    "{} {} {}",
-                    allocation as usize,
-                    { (*allocation).size },
-                    { (*allocation).allocated }
-                )?;
+                println!("{} {} {}", allocation as usize, { (*allocation).size }, {
+                    (*allocation).allocated
+                });
                 allocation = (*allocation).next;
             }
         }
-        Ok(())
     }
 }
 
