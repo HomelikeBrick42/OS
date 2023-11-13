@@ -1,5 +1,6 @@
 use crate::text_writer::TextWriter;
 use core::fmt::{Arguments, Result, Write};
+use spin::Once;
 
 #[macro_export]
 macro_rules! print {
@@ -20,7 +21,6 @@ macro_rules! println {
     }};
 }
 pub use println;
-use spin::Once;
 
 static TEXT_WRITER: Once<TextWriter<&'static [u8]>> = Once::new();
 
