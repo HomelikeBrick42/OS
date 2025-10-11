@@ -2,6 +2,43 @@ use crate::efi;
 use core::{arch::asm, cell::SyncUnsafeCell};
 use utf16_literal::utf16;
 
+#[derive(Debug, Clone, Copy)]
+pub struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl Color {
+    pub const fn add(self, other: Self) -> Self {
+        Self {
+            r: self.r.saturating_add(other.r),
+            g: self.g.saturating_add(other.g),
+            b: self.b.saturating_add(other.b),
+        }
+    }
+
+    pub const fn lerp(self, other: Self, t: u8) -> Self {
+        self.scale(u8::MAX - t).add(other.scale(t))
+    }
+
+    pub const fn multiply(self, other: Self) -> Self {
+        Self {
+            r: ((self.r as u16 * other.r as u16) / u8::MAX as u16) as u8,
+            g: ((self.g as u16 * other.g as u16) / u8::MAX as u16) as u8,
+            b: ((self.b as u16 * other.b as u16) / u8::MAX as u16) as u8,
+        }
+    }
+
+    pub const fn scale(self, brightness: u8) -> Self {
+        self.multiply(Color {
+            r: brightness,
+            g: brightness,
+            b: brightness,
+        })
+    }
+}
+
 enum FrameBufferFormat {
     Rgb,
     Bgr,
@@ -19,10 +56,10 @@ unsafe impl Send for Framebuffer {}
 unsafe impl Sync for Framebuffer {}
 
 impl Framebuffer {
-    pub fn color(&self, r: u8, g: u8, b: u8) -> FramebufferColor {
+    pub fn color(&self, color: Color) -> FramebufferColor {
         FramebufferColor(u32::from_ne_bytes(match self.format {
-            FrameBufferFormat::Rgb => [r, g, b, 0x00],
-            FrameBufferFormat::Bgr => [b, g, r, 0x00],
+            FrameBufferFormat::Rgb => [color.r, color.g, color.b, 0x00],
+            FrameBufferFormat::Bgr => [color.b, color.g, color.r, 0x00],
         }))
     }
 

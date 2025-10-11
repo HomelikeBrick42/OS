@@ -73,6 +73,7 @@ pub const SPACE_MONO: Font<'static> = Font {
 
 const fn parse_info(bytes: &[u8]) -> Info<'_> {
     let block = find_block(bytes, 1);
+    assert!(block.len() > 14);
     Info {
         font_size: u16::from_ne_bytes([block[0], block[1]]),
         smooth: block[2] & (1 << 0) != 0,
@@ -99,6 +100,7 @@ const fn parse_info(bytes: &[u8]) -> Info<'_> {
 
 const fn parse_common(bytes: &[u8]) -> Common {
     let block = find_block(bytes, 2);
+    assert!(block.len() == 15);
     Common {
         line_height: u16::from_ne_bytes([block[0], block[1]]),
         base: u16::from_ne_bytes([block[2], block[3]]),
@@ -115,6 +117,7 @@ const fn parse_common(bytes: &[u8]) -> Common {
 
 const fn chars_count(bytes: &[u8]) -> usize {
     let block = find_block(bytes, 4);
+    assert!(block.len().is_multiple_of(20));
     block.len() / 20
 }
 
@@ -135,6 +138,7 @@ const fn parse_chars<const N: usize>(bytes: &[u8]) -> [Char; N] {
     }; _];
 
     let block = find_block(bytes, 4);
+    assert!(block.len().is_multiple_of(20));
 
     {
         let mut i = 0;
@@ -164,7 +168,7 @@ const fn parse_chars<const N: usize>(bytes: &[u8]) -> [Char; N] {
     // sort the chars so a binary search can be done later
     {
         let mut i = 1;
-        while i < chars.len() {
+        while i < N {
             let mut j = i;
             while j > 0 && chars[j - 1].id > chars[j].id {
                 chars.swap(j - 1, j);
@@ -203,11 +207,7 @@ const fn find_block(bytes: &[u8], id: u8) -> &[u8] {
         let start = index;
         index += length;
         if found_id == id {
-            let start = bytes.split_at(start).1;
-            return match start.split_at_checked(index) {
-                Some((s, _)) => s,
-                None => start,
-            };
+            return bytes.split_at(start).1.split_at(length).0;
         }
     }
 
@@ -236,6 +236,9 @@ const fn parse_page(bytes: &[u8]) -> Page<'_> {
     assert!(bytes[index] == 0);
     assert!(bytes[index + 1] == 0);
     index += 2;
+
+    // color map bits
+    index += 1;
 
     // origin
     index += 4;

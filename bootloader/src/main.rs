@@ -4,7 +4,7 @@
 
 use font::{Font, SPACE_MONO};
 
-use crate::framebuffer::{framebuffer, init_framebuffer};
+use crate::framebuffer::{Color, Framebuffer, framebuffer, init_framebuffer};
 use core::{arch::asm, panic::PanicInfo};
 
 pub mod efi;
@@ -20,16 +20,41 @@ unsafe extern "efiapi" fn efi_main(
     let framebuffer = framebuffer();
     let width = framebuffer.width();
     let height = framebuffer.height();
-    framebuffer.fill(0, 0, width, height, framebuffer.color(0, 0, 0));
 
-    draw_char(0, 0, 'a', &SPACE_MONO);
+    let background = Color {
+        r: 20,
+        g: 20,
+        b: 20,
+    };
+    framebuffer.fill(0, 0, width, height, framebuffer.color(background));
+
+    let font = &SPACE_MONO;
+    draw_char(
+        0,
+        0,
+        'a',
+        Color {
+            r: 255,
+            g: 255,
+            b: 255,
+        },
+        background,
+        font,
+        framebuffer,
+    );
 
     hlt()
 }
 
-fn draw_char(x: usize, y: usize, c: char, font: &Font<'_>) {
-    let framebuffer = framebuffer();
-
+fn draw_char(
+    x: usize,
+    y: usize,
+    c: char,
+    color: Color,
+    background: Color,
+    font: &Font<'_>,
+    framebuffer: &Framebuffer,
+) {
     let Ok(char_index) = font.chars.binary_search_by_key(&(c as u32), |char| char.id) else {
         return;
     };
@@ -40,10 +65,8 @@ fn draw_char(x: usize, y: usize, c: char, font: &Font<'_>) {
         for xoffset in 0..char.width as usize {
             let brightness = page.brightnesses
                 [(char.x as usize + xoffset) + (char.y as usize + yoffset) * page.width as usize];
-            if brightness != 0 {
-                let color = framebuffer.color(255, 255, 255);
-                framebuffer.set_pixel(x + xoffset, y + yoffset, color);
-            }
+            let color = framebuffer.color(background.lerp(color, brightness));
+            framebuffer.set_pixel(x + xoffset, y + yoffset, color);
         }
     }
 }
@@ -56,7 +79,7 @@ fn panic(#[expect(unused)] info: &PanicInfo<'_>) -> ! {
         0,
         framebuffer.width(),
         framebuffer.height(),
-        framebuffer.color(255, 0, 0),
+        framebuffer.color(Color { r: 255, g: 0, b: 0 }),
     );
     hlt()
 }
