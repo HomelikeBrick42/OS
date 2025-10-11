@@ -6,8 +6,13 @@ version = 4
 name = "bootloader"
 version = "0.1.0"
 dependencies = [
+ "font",
  "utf16_literal",
 ]
+
+[[package]]
+name = "font"
+version = "0.1.0"
 
 [[package]]
 name = "utf16_literal"
