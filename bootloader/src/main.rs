@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(sync_unsafe_cell)]
 
 use crate::framebuffer::{framebuffer, init_framebuffer};
 use core::{arch::asm, panic::PanicInfo};
@@ -23,12 +24,16 @@ unsafe extern "efiapi" fn efi_main(
     framebuffer.fill(100, 0, 100, 300, framebuffer.color(0, 255, 0));
     framebuffer.fill(200, 0, 100, 300, framebuffer.color(0, 0, 255));
 
-    loop {
-        unsafe { asm!("hlt") };
-    }
+    hlt()
 }
 
 #[panic_handler]
 fn panic(#[expect(unused)] info: &PanicInfo<'_>) -> ! {
-    loop {}
+    hlt()
+}
+
+fn hlt() -> ! {
+    loop {
+        unsafe { asm!("hlt") };
+    }
 }

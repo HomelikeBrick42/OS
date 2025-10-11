@@ -1,5 +1,5 @@
 use crate::efi;
-use core::arch::asm;
+use core::{arch::asm, cell::SyncUnsafeCell};
 use utf16_literal::utf16;
 
 enum FrameBufferFormat {
@@ -71,19 +71,16 @@ impl Framebuffer {
 #[repr(transparent)]
 pub struct FramebufferColor(u32);
 
-static mut FRAMEBUFFER: Framebuffer = Framebuffer {
+static FRAMEBUFFER: SyncUnsafeCell<Framebuffer> = SyncUnsafeCell::new(Framebuffer {
     format: FrameBufferFormat::Rgb,
     pixels_base: core::ptr::null_mut(),
     pixels_width: 0,
     pixels_height: 0,
     pixels_per_scanline: 0,
-};
+});
 
 pub fn framebuffer() -> &'static Framebuffer {
-    #[expect(static_mut_refs)]
-    unsafe {
-        &FRAMEBUFFER
-    }
+    unsafe { &*FRAMEBUFFER.get() }
 }
 
 pub unsafe fn init_framebuffer(system_table: efi::SystemTable) -> efi::Status {
@@ -116,7 +113,7 @@ pub unsafe fn init_framebuffer(system_table: efi::SystemTable) -> efi::Status {
     let mode = unsafe { gop.mode().unwrap_unchecked().read() };
 
     unsafe {
-        FRAMEBUFFER = Framebuffer {
+        *FRAMEBUFFER.get() = Framebuffer {
             format,
             pixels_base: mode.frame_buffer_base.cast(),
             pixels_width: info.horizontal_resolution as _,
