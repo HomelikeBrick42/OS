@@ -28,27 +28,45 @@ unsafe extern "efiapi" fn efi_main(
     };
     framebuffer.fill(0, 0, width, height, framebuffer.color(background));
 
+    let (mut x, mut y) = (0, 0);
+
     let font = &SPACE_MONO;
-    draw_char(
-        0,
-        0,
-        'a',
-        Color {
-            r: 255,
-            g: 255,
-            b: 255,
-        },
-        background,
-        font,
-        framebuffer,
-    );
+    let mut char = |c: char| {
+        draw_char(
+            &mut x,
+            &mut y,
+            c,
+            Color {
+                r: 255,
+                g: 255,
+                b: 255,
+            },
+            background,
+            font,
+            framebuffer,
+        )
+    };
+
+    char('H');
+    char('e');
+    char('l');
+    char('l');
+    char('o');
+    char(',');
+    char(' ');
+    char('W');
+    char('o');
+    char('r');
+    char('l');
+    char('d');
+    char('!');
 
     hlt()
 }
 
 fn draw_char(
-    x: usize,
-    y: usize,
+    x: &mut usize,
+    y: &mut usize,
     c: char,
     color: Color,
     background: Color,
@@ -66,9 +84,14 @@ fn draw_char(
             let brightness = page.brightnesses
                 [(char.x as usize + xoffset) + (char.y as usize + yoffset) * page.width as usize];
             let color = framebuffer.color(background.lerp(color, brightness));
-            framebuffer.set_pixel(x + xoffset, y + yoffset, color);
+            framebuffer.set_pixel(
+                *x + xoffset + char.xoffset as usize,
+                *y + yoffset + char.yoffset as usize,
+                color,
+            );
         }
     }
+    *x += char.xadvance as usize;
 }
 
 #[panic_handler]
