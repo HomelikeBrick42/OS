@@ -2,13 +2,17 @@
 #![no_main]
 #![feature(sync_unsafe_cell)]
 
-use font::{Font, SPACE_MONO};
-
-use crate::framebuffer::{Color, Framebuffer, framebuffer, init_framebuffer};
+use crate::{
+    framebuffer::{Color, framebuffer, init_framebuffer},
+    text_writer::TextWriter,
+};
+use core::fmt::Write;
 use core::{arch::asm, panic::PanicInfo};
+use font::SPACE_MONO;
 
 pub mod efi;
 pub mod framebuffer;
+pub mod text_writer;
 
 #[unsafe(no_mangle)]
 unsafe extern "efiapi" fn efi_main(
@@ -28,82 +32,59 @@ unsafe extern "efiapi" fn efi_main(
     };
     framebuffer.fill(0, 0, width, height, framebuffer.color(background));
 
-    let (mut x, mut y) = (0, 0);
-
-    let font = &SPACE_MONO;
-    let mut char = |c: char| {
-        draw_char(
-            &mut x,
-            &mut y,
-            c,
-            Color {
-                r: 255,
-                g: 255,
-                b: 255,
-            },
-            background,
-            font,
-            framebuffer,
-        )
+    let mut text_writer = TextWriter {
+        x: 0,
+        y: 0,
+        left_margin: 0,
+        color: Color {
+            r: 255,
+            g: 255,
+            b: 255,
+        },
+        background,
+        font: &SPACE_MONO,
+        framebuffer,
     };
 
-    char('H');
-    char('e');
-    char('l');
-    char('l');
-    char('o');
-    char(',');
-    char(' ');
-    char('W');
-    char('o');
-    char('r');
-    char('l');
-    char('d');
-    char('!');
+    writeln!(text_writer, "Hello, World!").unwrap();
+    writeln!(text_writer, "Some more text.").unwrap();
+    writeln!(text_writer, "And a number: {}", 1 + 2).unwrap();
 
     hlt()
 }
 
-fn draw_char(
-    x: &mut usize,
-    y: &mut usize,
-    c: char,
-    color: Color,
-    background: Color,
-    font: &Font<'_>,
-    framebuffer: &Framebuffer,
-) {
-    let Ok(char_index) = font.chars.binary_search_by_key(&(c as u32), |char| char.id) else {
-        return;
-    };
-    let char = &font.chars[char_index];
-    let page = &font.pages[char.page as usize];
-
-    for yoffset in 0..char.height as usize {
-        for xoffset in 0..char.width as usize {
-            let brightness = page.brightnesses
-                [(char.x as usize + xoffset) + (char.y as usize + yoffset) * page.width as usize];
-            let color = framebuffer.color(background.lerp(color, brightness));
-            framebuffer.set_pixel(
-                *x + xoffset + char.xoffset as usize,
-                *y + yoffset + char.yoffset as usize,
-                color,
-            );
-        }
-    }
-    *x += char.xadvance as usize;
-}
-
 #[panic_handler]
-fn panic(#[expect(unused)] info: &PanicInfo<'_>) -> ! {
+fn panic(info: &PanicInfo<'_>) -> ! {
     let framebuffer = framebuffer();
+
+    let background = Color { r: 255, g: 0, b: 0 };
     framebuffer.fill(
         0,
         0,
         framebuffer.width(),
         framebuffer.height(),
-        framebuffer.color(Color { r: 255, g: 0, b: 0 }),
+        framebuffer.color(background),
     );
+
+    let mut text_writer = TextWriter {
+        x: 0,
+        y: 0,
+        left_margin: 0,
+        color: Color {
+            r: 255,
+            g: 255,
+            b: 255,
+        },
+        background,
+        font: &SPACE_MONO,
+        framebuffer,
+    };
+
+    if let Some(location) = info.location() {
+        _ = write!(text_writer, "{}: ", location);
+    }
+    _ = writeln!(text_writer, "{}", info.message());
+
     hlt()
 }
 
