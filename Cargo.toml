@@ -9,3 +9,7 @@ font = { path = "font" }
 rust.elided_lifetimes_in_paths = "deny"
 
 clippy.missing_safety_doc = "allow"
+
+[profile.dev]
+opt-level = 3
+lto = "thin"
