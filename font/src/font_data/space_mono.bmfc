@@ -3,7 +3,7 @@ fileVersion=1
 
 # font settings
 fontName=Space Mono
-fontFile=../../../../Users/lukev/Downloads/Space_Mono/SpaceMono-Regular.ttf
+fontFile=space_mono/SpaceMono-Regular.ttf
 charSet=0
 fontSize=32
 aa=1
