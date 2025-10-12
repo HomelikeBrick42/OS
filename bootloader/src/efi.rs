@@ -1,11 +1,12 @@
 use core::{num::NonZeroIsize, ptr::NonNull};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Error(pub NonZeroIsize);
 
 impl Error {
-    pub const UNSUPPORTED: Self = Self(NonZeroIsize::new(3).unwrap());
+    pub const UNSUPPORTED: Self = Self(NonZeroIsize::new(isize::MIN | 3).unwrap());
+    pub const BUFFER_TOO_SMALL: Self = Self(NonZeroIsize::new(isize::MIN | 5).unwrap());
 }
 
 pub type Status = Result<(), Error>;
@@ -45,6 +46,51 @@ impl SystemTable {
             let protocol = self.locate_protocol(Guid::GRAPHICS_OUTPUT_PROTOCOL)?;
             Ok(GOP(protocol.cast()))
         }
+    }
+
+    pub unsafe fn allocate_pages(
+        self,
+        allocate_type: AllocateType,
+        memory_type: MemoryType,
+        pages: usize,
+    ) -> Result<*mut (), Error> {
+        let mut ptr = core::ptr::null_mut();
+        unsafe {
+            ((*(*self.0).boot_services).allocate_pages)(
+                allocate_type,
+                memory_type,
+                pages,
+                &mut ptr,
+            )?;
+        }
+        Ok(ptr)
+    }
+
+    pub unsafe fn free_pages(self, memory: *mut (), pages: usize) -> Status {
+        unsafe { ((*(*self.0).boot_services).free_pages)(memory, pages) }
+    }
+
+    pub unsafe fn get_memory_map(
+        self,
+        memory_map_size: &mut usize,
+        memory_map: *mut MemoryDescriptor,
+        map_key: &mut usize,
+        descriptor_size: &mut usize,
+        descriptor_version: &mut u32,
+    ) -> Status {
+        unsafe {
+            ((*(*self.0).boot_services).get_memory_map)(
+                memory_map_size,
+                memory_map,
+                map_key,
+                descriptor_size,
+                descriptor_version,
+            )
+        }
+    }
+
+    pub unsafe fn exit_boot_services(self, image_handle: Handle, map_key: usize) -> Status {
+        unsafe { ((*(*self.0).boot_services).exit_boot_services)(image_handle, map_key) }
     }
 }
 
@@ -128,9 +174,20 @@ struct BootServices {
     hdr: TableHeader,
     raise_tpl: unsafe extern "efiapi" fn(),
     restore_tpl: unsafe extern "efiapi" fn(),
-    allocate_pages: unsafe extern "efiapi" fn(),
-    free_pages: unsafe extern "efiapi" fn(),
-    get_memory_map: unsafe extern "efiapi" fn(),
+    allocate_pages: unsafe extern "efiapi" fn(
+        allocate_type: AllocateType,
+        memory_type: MemoryType,
+        pages: usize,
+        memory: *mut *mut (),
+    ) -> Status,
+    free_pages: unsafe extern "efiapi" fn(memory: *mut (), pages: usize) -> Status,
+    get_memory_map: unsafe extern "efiapi" fn(
+        memory_map_size: *mut usize,
+        memory_map: *mut MemoryDescriptor,
+        map_key: *mut usize,
+        descriptor_size: *mut usize,
+        descriptor_version: *mut u32,
+    ) -> Status,
     allocate_pool: unsafe extern "efiapi" fn(),
     free_pool: unsafe extern "efiapi" fn(),
     create_event: unsafe extern "efiapi" fn(),
@@ -152,7 +209,7 @@ struct BootServices {
     start_image: unsafe extern "efiapi" fn(),
     exit: unsafe extern "efiapi" fn(),
     unload_image: unsafe extern "efiapi" fn(),
-    exit_boot_services: unsafe extern "efiapi" fn(),
+    exit_boot_services: unsafe extern "efiapi" fn(image_handle: Handle, map_key: usize) -> Status,
     get_next_monotonic_count: unsafe extern "efiapi" fn(),
     stall: unsafe extern "efiapi" fn(),
     set_watchdog_timer: unsafe extern "efiapi" fn(),
@@ -174,6 +231,45 @@ struct BootServices {
     copy_mem: unsafe extern "efiapi" fn(),
     set_mem: unsafe extern "efiapi" fn(),
     create_event_ex: unsafe extern "efiapi" fn(),
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub enum AllocateType {
+    AnyPages,
+    MaxAddress,
+    Address,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u32)]
+pub enum MemoryType {
+    ReservedMemoryType,
+    LoaderCode,
+    LoaderData,
+    BootServicesCode,
+    BootServicesData,
+    RuntimeServicesCode,
+    RuntimeServicesData,
+    ConventionalMemory,
+    UnusableMemory,
+    ACPIReclaimMemory,
+    ACPIMemoryNVS,
+    MemoryMappedIO,
+    MemoryMappedIOPortSpace,
+    PalCode,
+    PersistentMemory,
+    UnacceptedMemoryType,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct MemoryDescriptor {
+    pub memory_type: MemoryType,
+    pub physical_start: usize,
+    pub virtual_start: usize,
+    pub number_of_pages: u64,
+    pub attribute: u64,
 }
 
 #[repr(C)]
@@ -261,10 +357,10 @@ pub struct GOPModeInformation {
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub enum GraphicsPixelFormat {
-    PixelRedGreenBlueReserved8BitPerColor,
-    PixelBlueGreenRedReserved8BitPerColor,
-    PixelBitMask,
-    PixelBltOnly,
+    RedGreenBlueReserved8BitPerColor,
+    BlueGreenRedReserved8BitPerColor,
+    BitMask,
+    BltOnly,
 }
 
 #[derive(Debug, Clone, Copy)]

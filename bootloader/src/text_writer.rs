@@ -15,10 +15,7 @@ pub struct TextWriter<'a> {
 
 impl Write for TextWriter<'_> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        for c in s.chars() {
-            self.write_char(c)?;
-        }
-        Ok(())
+        s.chars().try_for_each(|c| self.write_char(c))
     }
 
     fn write_char(&mut self, c: char) -> core::fmt::Result {
@@ -44,6 +41,7 @@ impl Write for TextWriter<'_> {
                     );
                 }
             }
+
             self.x += char.xadvance as usize;
         }
 

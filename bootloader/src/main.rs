@@ -16,7 +16,7 @@ pub mod text_writer;
 
 #[unsafe(no_mangle)]
 unsafe extern "efiapi" fn efi_main(
-    #[expect(unused)] image_handle: efi::Handle,
+    image_handle: efi::Handle,
     system_table: efi::SystemTable,
 ) -> efi::Status {
     unsafe { init_framebuffer(system_table)? };
@@ -46,9 +46,65 @@ unsafe extern "efiapi" fn efi_main(
         framebuffer,
     };
 
-    writeln!(text_writer, "Hello, World!").unwrap();
-    writeln!(text_writer, "Some more text.").unwrap();
-    writeln!(text_writer, "And a number: {}", 1 + 2).unwrap();
+    // get memory map
+    let mut memory_map_size = 0;
+    let mut memory_map = core::ptr::null_mut();
+    let mut map_key = 0;
+    let mut memory_descriptor_size = 0;
+    let mut memory_descritor_version = 0;
+    loop {
+        let old_size = memory_map_size;
+        match unsafe {
+            system_table.get_memory_map(
+                &mut memory_map_size,
+                memory_map,
+                &mut map_key,
+                &mut memory_descriptor_size,
+                &mut memory_descritor_version,
+            )
+        } {
+            Err(efi::Error::BUFFER_TOO_SMALL) => {
+                if !memory_map.is_null() {
+                    unsafe { system_table.free_pages(memory_map.cast(), old_size.div_ceil(4096))? };
+                }
+                memory_map = unsafe {
+                    system_table
+                        .allocate_pages(
+                            efi::AllocateType::AnyPages,
+                            efi::MemoryType::LoaderData,
+                            memory_map_size.div_ceil(4096),
+                        )?
+                        .cast()
+                };
+                continue;
+            }
+            result => break result?,
+        }
+    }
+    assert!(memory_map_size.is_multiple_of(memory_descriptor_size));
+
+    // exit boot services
+    unsafe { system_table.exit_boot_services(image_handle, map_key)? };
+
+    let mut available_memory = 0;
+
+    let memory_map_count = memory_map_size / memory_descriptor_size;
+    for i in 0..memory_map_count {
+        let memory_descriptor = unsafe { &*memory_map.byte_add(i * memory_descriptor_size) };
+        if let efi::MemoryType::ConventionalMemory
+        | efi::MemoryType::BootServicesCode
+        | efi::MemoryType::BootServicesData = memory_descriptor.memory_type
+        {
+            available_memory += memory_descriptor.number_of_pages as usize * 4096;
+        }
+    }
+
+    writeln!(
+        text_writer,
+        "Available Memory: {}kb",
+        available_memory.div_ceil(1024)
+    )
+    .unwrap();
 
     hlt()
 }

@@ -126,9 +126,9 @@ pub unsafe fn init_framebuffer(system_table: efi::SystemTable) -> efi::Status {
         unsafe { gop.query_mode(gop.mode().map(|mode| (*mode.as_ptr()).mode).unwrap_or(0))? };
 
     let format = match info.pixel_format {
-        efi::GraphicsPixelFormat::PixelRedGreenBlueReserved8BitPerColor => FrameBufferFormat::Rgb,
-        efi::GraphicsPixelFormat::PixelBlueGreenRedReserved8BitPerColor => FrameBufferFormat::Bgr,
-        efi::GraphicsPixelFormat::PixelBitMask => unsafe {
+        efi::GraphicsPixelFormat::RedGreenBlueReserved8BitPerColor => FrameBufferFormat::Rgb,
+        efi::GraphicsPixelFormat::BlueGreenRedReserved8BitPerColor => FrameBufferFormat::Bgr,
+        efi::GraphicsPixelFormat::BitMask => unsafe {
             system_table
                 .con_out_print(utf16!("bitmask pixel format is not supported\r\n\0").as_ptr())?;
             for _ in 0..999999999 {
@@ -136,7 +136,7 @@ pub unsafe fn init_framebuffer(system_table: efi::SystemTable) -> efi::Status {
             }
             return Err(efi::Error::UNSUPPORTED);
         },
-        efi::GraphicsPixelFormat::PixelBltOnly => unsafe {
+        efi::GraphicsPixelFormat::BltOnly => unsafe {
             system_table
                 .con_out_print(utf16!("blt pixel format is not supported\r\n\0").as_ptr())?;
             for _ in 0..999999999 {
