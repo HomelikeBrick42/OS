@@ -1,12 +1,12 @@
 use spin::Mutex;
 
 use crate::{efi, hlt, text_writer::TextWriter};
-use core::fmt::Write;
+use core::{fmt::Write, num::NonZeroUsize};
 
 #[derive(Debug)]
 pub struct Block {
     pub start_address: usize,
-    pub pages_count: usize,
+    pub page_count: usize,
     pub bitmap_start: usize,
 }
 
@@ -19,14 +19,14 @@ impl PageAllocator {
     pub unsafe fn set_allocated(&mut self, address: usize, value: bool) {
         for block in self.blocks {
             if address < block.start_address
-                || address >= block.start_address + block.pages_count * 4096
+                || address >= block.start_address + block.page_count * 4096
             {
                 continue;
             }
 
             let index = block.bitmap_start + (address - block.start_address) / 4096;
             let bitmap_index = index / u8::BITS as usize;
-            let bit_index = bitmap_index % u8::BITS as usize;
+            let bit_index = index % u8::BITS as usize;
             if value {
                 self.bitmap[bitmap_index] |= 1 << bit_index;
             } else {
@@ -38,17 +38,63 @@ impl PageAllocator {
     pub fn get_allocated(&self, address: usize) -> Option<bool> {
         for block in self.blocks {
             if address < block.start_address
-                || address >= block.start_address + block.pages_count * 4096
+                || address >= block.start_address + block.page_count * 4096
             {
                 continue;
             }
 
             let index = block.bitmap_start + (address - block.start_address) / 4096;
             let bitmap_index = index / u8::BITS as usize;
-            let bit_index = bitmap_index % u8::BITS as usize;
+            let bit_index = index % u8::BITS as usize;
             return Some(self.bitmap[bitmap_index] & (1 << bit_index) != 0);
         }
         None
+    }
+
+    pub fn allocate(
+        &mut self,
+        page_count: NonZeroUsize,
+    ) -> Option<usize> {
+        for block in self.blocks {
+            let mut start = None;
+            let mut seen_count = 0usize;
+            for page in 0..block.page_count {
+                {
+                    let index = block.bitmap_start + page;
+                    let bitmap_index = index / u8::BITS as usize;
+                    let bit_index = index % u8::BITS as usize;
+                    if self.bitmap[bitmap_index] & (1 << bit_index) != 0 {
+                        start = None;
+                        seen_count = 0;
+                        continue;
+                    }
+                }
+
+                if start.is_none() {
+                    start = Some(block.start_address + page * 4096);
+                }
+                seen_count += 1;
+
+                if let Some(start) = start
+                    && seen_count >= page_count.get()
+                {
+                    for i in 0..page_count.get() {
+                        let index = block.bitmap_start + (start - block.start_address) / 4096 + i;
+                        let bitmap_index = index / u8::BITS as usize;
+                        let bit_index = index % u8::BITS as usize;
+                        self.bitmap[bitmap_index] |= 1 << bit_index;
+                    }
+                    return Some(start);
+                }
+            }
+        }
+        None
+    }
+
+    pub unsafe fn free(&mut self, address: usize, page_count: usize) {
+        for i in 0..page_count {
+            unsafe { self.set_allocated(address + i * 4096, false) };
+        }
     }
 }
 
@@ -161,9 +207,7 @@ pub unsafe fn init_page_allocator(
             size_so_far = 0;
         }
     }
-    if size_so_far >= required_allocator_size {
-        writeln!(text_writer, "Allocating page allocator state at {:p}", ptr).unwrap();
-    } else {
+    if size_so_far < required_allocator_size {
         writeln!(
             text_writer,
             "Cannot find enough memory to store page allocator state"
@@ -184,7 +228,7 @@ pub unsafe fn init_page_allocator(
             let memory_descriptor = unsafe { &*memory_map.byte_add(i * memory_descriptor_size) };
 
             let block = &mut blocks[block_index];
-            if block.pages_count == 0 {
+            if block.page_count == 0 {
                 block.start_address = memory_descriptor.physical_start;
                 block.bitmap_start = i;
             }
@@ -200,7 +244,7 @@ pub unsafe fn init_page_allocator(
                 bitmap[index] |= 1 << bit_index;
             }
 
-            block.pages_count += 1;
+            block.page_count += 1;
 
             if i + 1 < memory_map_count {
                 let next_memory_descriptor =
@@ -221,5 +265,9 @@ pub unsafe fn init_page_allocator(
         let base_address = ptr.addr();
         unsafe { page_allocator.set_allocated(base_address + index * 4096, true) };
     }
+
+    // make sure to not allocate the null page, just for now
+    unsafe { page_allocator.set_allocated(0, true) };
+
     *PAGE_ALLOCATOR.lock() = page_allocator;
 }

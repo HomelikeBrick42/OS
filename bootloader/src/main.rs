@@ -7,8 +7,8 @@ use crate::{
     page_allocator::{init_page_allocator, with_page_allocator},
     text_writer::TextWriter,
 };
-use core::fmt::Write;
 use core::{arch::asm, panic::PanicInfo};
+use core::{fmt::Write, num::NonZeroUsize};
 use font::SPACE_MONO;
 
 pub mod efi;
@@ -98,12 +98,16 @@ unsafe extern "efiapi" fn efi_main(
     };
 
     with_page_allocator(|alloc| {
-        for block in alloc.blocks {
-            writeln!(text_writer, "{block:x?}").unwrap();
+        for i in 0..10 {
+            let size = NonZeroUsize::MIN;
+            let addr = alloc.allocate(size);
+            writeln!(text_writer, "Allocated: {:x?}", addr).unwrap();
+            if i % 2 == 1
+                && let Some(addr) = addr
+            {
+                unsafe { alloc.free(addr, size.get()) };
+            }
         }
-
-        let allocated = alloc.get_allocated(0x0);
-        writeln!(text_writer, "{:?}", allocated).unwrap();
     });
 
     hlt()

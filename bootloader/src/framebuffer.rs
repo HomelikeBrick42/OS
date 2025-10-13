@@ -63,6 +63,14 @@ impl Framebuffer {
         }))
     }
 
+    pub fn base(&self) -> usize {
+        self.pixels_base.addr()
+    }
+
+    pub fn size(&self) -> usize {
+        self.pixels_height * self.pixels_per_scanline
+    }
+
     pub fn width(&self) -> usize {
         self.pixels_width
     }
