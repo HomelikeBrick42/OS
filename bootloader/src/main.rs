@@ -3,11 +3,9 @@
 #![feature(sync_unsafe_cell)]
 
 use crate::{
-    framebuffer::{Color, framebuffer, init_framebuffer},
-    page_allocator::{init_page_allocator, with_page_allocator},
-    text_writer::TextWriter,
+    framebuffer::{framebuffer, init_framebuffer, Color}, gdt::setup_gdt, page_allocator::{init_page_allocator, with_page_allocator}, text_writer::TextWriter, utils::{disable_interrupts, hlt}
 };
-use core::{arch::asm, panic::PanicInfo};
+use core::panic::PanicInfo;
 use core::{fmt::Write, num::NonZeroUsize};
 use font::SPACE_MONO;
 
@@ -15,6 +13,8 @@ pub mod efi;
 pub mod framebuffer;
 pub mod page_allocator;
 pub mod text_writer;
+pub mod utils;
+pub mod gdt;
 
 #[unsafe(no_mangle)]
 unsafe extern "efiapi" fn efi_main(
@@ -88,6 +88,9 @@ unsafe extern "efiapi" fn efi_main(
     // exit boot services
     unsafe { system_table.exit_boot_services(image_handle, map_key)? };
 
+    unsafe { disable_interrupts() };
+    unsafe { setup_gdt() };
+
     unsafe {
         init_page_allocator(
             memory_map,
@@ -146,10 +149,4 @@ fn panic(info: &PanicInfo<'_>) -> ! {
     _ = writeln!(text_writer, "{}", info.message());
 
     hlt()
-}
-
-fn hlt() -> ! {
-    loop {
-        unsafe { asm!("hlt") };
-    }
 }
