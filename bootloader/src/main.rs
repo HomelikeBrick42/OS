@@ -3,7 +3,11 @@
 #![feature(sync_unsafe_cell)]
 
 use crate::{
-    framebuffer::{framebuffer, init_framebuffer, Color}, gdt::setup_gdt, page_allocator::{init_page_allocator, with_page_allocator}, text_writer::TextWriter, utils::{disable_interrupts, hlt}
+    framebuffer::{Color, framebuffer, init_framebuffer},
+    gdt::setup_gdt,
+    page_allocator::{init_page_allocator, with_page_allocator},
+    text_writer::TextWriter,
+    utils::{disable_interrupts, hlt},
 };
 use core::panic::PanicInfo;
 use core::{fmt::Write, num::NonZeroUsize};
@@ -11,10 +15,10 @@ use font::SPACE_MONO;
 
 pub mod efi;
 pub mod framebuffer;
+pub mod gdt;
 pub mod page_allocator;
 pub mod text_writer;
 pub mod utils;
-pub mod gdt;
 
 #[unsafe(no_mangle)]
 unsafe extern "efiapi" fn efi_main(
@@ -102,13 +106,14 @@ unsafe extern "efiapi" fn efi_main(
 
     with_page_allocator(|alloc| {
         for i in 0..10 {
-            let size = NonZeroUsize::MIN;
-            let addr = alloc.allocate(size);
+            let align = NonZeroUsize::MIN;
+            let size = 4096;
+            let addr = alloc.allocate(align, size);
             writeln!(text_writer, "Allocated: {:x?}", addr).unwrap();
             if i % 2 == 1
                 && let Some(addr) = addr
             {
-                unsafe { alloc.free(addr, size.get()) };
+                unsafe { alloc.free(addr, size) };
             }
         }
     });

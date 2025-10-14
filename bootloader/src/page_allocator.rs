@@ -51,10 +51,11 @@ impl PageAllocator {
         None
     }
 
-    pub fn allocate(
-        &mut self,
-        page_count: NonZeroUsize,
-    ) -> Option<usize> {
+    pub fn allocate(&mut self, alignment: NonZeroUsize, size: usize) -> Option<usize> {
+        if size == 0 {
+            return Some(alignment.get());
+        }
+
         for block in self.blocks {
             let mut start = None;
             let mut seen_count = 0usize;
@@ -71,14 +72,18 @@ impl PageAllocator {
                 }
 
                 if start.is_none() {
+                    // make sure its aligned if the allocation is starting here
+                    if (block.start_address + page * 4096) % alignment.get() != 0 {
+                        continue;
+                    }
                     start = Some(block.start_address + page * 4096);
                 }
-                seen_count += 1;
+                seen_count += 4096;
 
                 if let Some(start) = start
-                    && seen_count >= page_count.get()
+                    && seen_count >= size
                 {
-                    for i in 0..page_count.get() {
+                    for i in 0..size.div_ceil(4096) {
                         let index = block.bitmap_start + (start - block.start_address) / 4096 + i;
                         let bitmap_index = index / u8::BITS as usize;
                         let bit_index = index % u8::BITS as usize;
@@ -91,8 +96,12 @@ impl PageAllocator {
         None
     }
 
-    pub unsafe fn free(&mut self, address: usize, page_count: usize) {
-        for i in 0..page_count {
+    pub unsafe fn free(&mut self, address: usize, size: usize) {
+        if size == 0 {
+            return;
+        }
+
+        for i in 0..size.div_ceil(4096) {
             unsafe { self.set_allocated(address + i * 4096, false) };
         }
     }
