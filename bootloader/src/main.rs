@@ -117,7 +117,6 @@ unsafe extern "efiapi" fn efi_main(
         let _: extern "win64" fn() -> ! = kernel_main;
         asm!(
             "mov rsp, {stack_start}",
-            "mov rbp, rsp",
             "call {kernel_main}",
             stack_start = in(reg) stack_start,
             kernel_main = sym kernel_main,
