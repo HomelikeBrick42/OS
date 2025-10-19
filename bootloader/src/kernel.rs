@@ -56,15 +56,6 @@ pub extern "win64" fn kernel_main() -> ! {
     unsafe { enable_paging() };
 
     with_page_allocator(|alloc| {
-        let x = 0;
-        writeln!(text_writer, "&x = {:p}", &raw const x).unwrap();
-        writeln!(
-            text_writer,
-            "x allocated: {:?}",
-            alloc.get_allocated(&raw const x as usize)
-        )
-        .unwrap();
-
         for i in 0..10 {
             let align = NonZeroUsize::MIN;
             let size = 4096;

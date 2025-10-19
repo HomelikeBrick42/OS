@@ -268,7 +268,7 @@ pub struct MemoryDescriptor {
     pub memory_type: MemoryType,
     pub physical_start: usize,
     pub virtual_start: usize,
-    pub number_of_pages: u64,
+    pub number_of_pages: usize,
     pub attribute: u64,
 }
 

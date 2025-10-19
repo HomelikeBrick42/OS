@@ -36,6 +36,7 @@ impl PageAllocator {
             } else {
                 self.bitmap[bitmap_index] &= !(1 << bit_index);
             }
+            return;
         }
     }
 
@@ -166,14 +167,14 @@ pub unsafe fn init_page_allocator(
             let next_memory_descriptor =
                 unsafe { &*memory_map.byte_add((i + 1) * memory_descriptor_size) };
 
-            if memory_descriptor.physical_start + memory_descriptor.number_of_pages as usize * 4096
+            if memory_descriptor.physical_start + memory_descriptor.number_of_pages * 4096
                 != next_memory_descriptor.physical_start
             {
                 block_count += 1;
             }
         }
 
-        required_page_bits += memory_descriptor.number_of_pages as usize;
+        required_page_bits += memory_descriptor.number_of_pages;
     }
 
     let blocks_size = block_count * size_of::<Block>();
@@ -197,7 +198,7 @@ pub unsafe fn init_page_allocator(
                 ptr = core::ptr::with_exposed_provenance_mut(memory_descriptor.physical_start);
             }
 
-            size_so_far += memory_descriptor.number_of_pages as usize * 4096;
+            size_so_far += memory_descriptor.number_of_pages * 4096;
 
             if size_so_far >= required_allocator_size {
                 break;
@@ -208,7 +209,7 @@ pub unsafe fn init_page_allocator(
             let next_memory_descriptor =
                 unsafe { &*memory_map.byte_add((i + 1) * memory_descriptor_size) };
 
-            if memory_descriptor.physical_start + memory_descriptor.number_of_pages as usize * 4096
+            if memory_descriptor.physical_start + memory_descriptor.number_of_pages * 4096
                 != next_memory_descriptor.physical_start
             {
                 can_use_page = false;
@@ -246,25 +247,13 @@ pub unsafe fn init_page_allocator(
                 block.bitmap_start = i;
             }
 
-            if !matches!(
-                memory_descriptor.memory_type,
-                efi::MemoryType::ConventionalMemory
-                    | efi::MemoryType::BootServicesCode
-                    | efi::MemoryType::BootServicesData
-            ) {
-                let index = i / u8::BITS as usize;
-                let bit_index = i % u8::BITS as usize;
-                bitmap[index] |= 1 << bit_index;
-            }
-
-            block.page_count += 1;
+            block.page_count += memory_descriptor.number_of_pages;
 
             if i + 1 < memory_map_count {
                 let next_memory_descriptor =
                     unsafe { &*memory_map.byte_add((i + 1) * memory_descriptor_size) };
 
-                if memory_descriptor.physical_start
-                    + memory_descriptor.number_of_pages as usize * 4096
+                if memory_descriptor.physical_start + memory_descriptor.number_of_pages * 4096
                     != next_memory_descriptor.physical_start
                 {
                     block_index += 1;
@@ -274,6 +263,24 @@ pub unsafe fn init_page_allocator(
     }
 
     let mut page_allocator = PageAllocator { blocks, bitmap };
+
+    for i in 0..memory_map_count {
+        let memory_descriptor = unsafe { &*memory_map.byte_add(i * memory_descriptor_size) };
+        if !matches!(
+            memory_descriptor.memory_type,
+            efi::MemoryType::ConventionalMemory
+                | efi::MemoryType::BootServicesCode
+                | efi::MemoryType::BootServicesData
+        ) {
+            for index in 0..memory_descriptor.number_of_pages {
+                unsafe {
+                    page_allocator
+                        .set_allocated(memory_descriptor.physical_start + index * 4096, true);
+                }
+            }
+        }
+    }
+
     for index in 0..required_allocator_size.div_ceil(4096) {
         let base_address = ptr.addr();
         unsafe { page_allocator.set_allocated(base_address + index * 4096, true) };
