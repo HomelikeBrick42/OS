@@ -118,7 +118,7 @@ unsafe extern "efiapi" fn efi_main(
         asm!(
             "mov rsp, {stack_start}",
             "mov rbp, rsp",
-            "jmp {kernel_main}",
+            "call {kernel_main}",
             stack_start = in(reg) stack_start,
             kernel_main = sym kernel_main,
             options(noreturn)
