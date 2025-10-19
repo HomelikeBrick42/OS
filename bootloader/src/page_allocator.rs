@@ -189,8 +189,6 @@ pub unsafe fn init_page_allocator(
         let mut can_use_page = matches!(
             memory_descriptor.memory_type,
             efi::MemoryType::ConventionalMemory
-                | efi::MemoryType::BootServicesCode
-                | efi::MemoryType::BootServicesData
         );
 
         if can_use_page {
