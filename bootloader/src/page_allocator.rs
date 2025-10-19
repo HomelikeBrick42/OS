@@ -11,11 +11,15 @@ pub struct Block {
 }
 
 pub struct PageAllocator {
-    pub blocks: &'static [Block],
+    blocks: &'static [Block],
     bitmap: &'static mut [u8],
 }
 
 impl PageAllocator {
+    pub fn blocks(&self) -> &'static [Block] {
+        self.blocks
+    }
+
     pub unsafe fn set_allocated(&mut self, address: usize, value: bool) {
         for block in self.blocks {
             if address < block.start_address

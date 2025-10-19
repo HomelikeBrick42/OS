@@ -6,6 +6,7 @@ use crate::{
     framebuffer::{Color, framebuffer, init_framebuffer},
     gdt::setup_gdt,
     page_allocator::{init_page_allocator, with_page_allocator},
+    paging::{enable_paging, init_paging_and_identity_map_all_pages_from_page_allocator, map_page},
     text_writer::TextWriter,
     utils::{disable_interrupts, hlt},
 };
@@ -17,6 +18,7 @@ pub mod efi;
 pub mod framebuffer;
 pub mod gdt;
 pub mod page_allocator;
+pub mod paging;
 pub mod text_writer;
 pub mod utils;
 
@@ -103,6 +105,20 @@ unsafe extern "efiapi" fn efi_main(
             &mut text_writer,
         )
     };
+
+    unsafe { init_paging_and_identity_map_all_pages_from_page_allocator() };
+
+    // make sure to identity map the framebuffer
+    {
+        assert_eq!(framebuffer.base() % 4096, 0);
+        let base = framebuffer.base();
+        for i in 0..framebuffer.size().div_ceil(4096) {
+            let page = base + i * 4096;
+            unsafe { map_page(page, page) };
+        }
+    }
+
+    unsafe { enable_paging() };
 
     with_page_allocator(|alloc| {
         for i in 0..10 {

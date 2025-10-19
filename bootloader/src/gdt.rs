@@ -80,6 +80,7 @@ unsafe fn reload_kernel_segments() {
             "mov fs, ax",
             "mov gs, ax",
             "mov ss, ax",
+            out("ax") _, // mark rax/ax as a clobber register
             kernel_code = const offset_of!(Gdt, kernel_code),
             kernel_data = const offset_of!(Gdt, kernel_data),
         );
