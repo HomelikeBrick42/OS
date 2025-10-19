@@ -1,5 +1,6 @@
 use crate::{
     framebuffer::{Color, framebuffer},
+    gdt::setup_gdt,
     page_allocator::with_page_allocator,
     paging::{enable_paging, init_paging_and_identity_map_all_pages_from_page_allocator, map_page},
     text_writer::TextWriter,
@@ -8,7 +9,7 @@ use crate::{
 use core::{fmt::Write, num::NonZeroUsize};
 use font::SPACE_MONO;
 
-pub extern "sysv64" fn kernel_main() -> ! {
+pub extern "win64" fn kernel_main() -> ! {
     let framebuffer = framebuffer();
 
     let background = Color {
@@ -37,6 +38,8 @@ pub extern "sysv64" fn kernel_main() -> ! {
         font: &SPACE_MONO,
         framebuffer,
     };
+
+    unsafe { setup_gdt() };
 
     unsafe { init_paging_and_identity_map_all_pages_from_page_allocator() };
 

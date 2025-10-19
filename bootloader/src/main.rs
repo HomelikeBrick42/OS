@@ -4,7 +4,6 @@
 
 use crate::{
     framebuffer::{Color, framebuffer, init_framebuffer},
-    gdt::setup_gdt,
     kernel::kernel_main,
     page_allocator::{init_page_allocator, with_page_allocator},
     text_writer::TextWriter,
@@ -96,7 +95,6 @@ unsafe extern "efiapi" fn efi_main(
     unsafe { system_table.exit_boot_services(image_handle, map_key)? };
 
     unsafe { disable_interrupts() };
-    unsafe { setup_gdt() };
 
     unsafe {
         init_page_allocator(
@@ -116,6 +114,7 @@ unsafe extern "efiapi" fn efi_main(
         });
 
         let stack_start = stack + stack_size;
+        let _: extern "win64" fn() -> ! = kernel_main;
         asm!(
             "mov rsp, {stack_start}",
             "mov rbp, rsp",
