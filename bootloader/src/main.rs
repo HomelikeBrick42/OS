@@ -5,18 +5,19 @@
 use crate::{
     framebuffer::{Color, framebuffer, init_framebuffer},
     gdt::setup_gdt,
+    kernel::kernel_main,
     page_allocator::{init_page_allocator, with_page_allocator},
-    paging::{enable_paging, init_paging_and_identity_map_all_pages_from_page_allocator, map_page},
     text_writer::TextWriter,
     utils::{disable_interrupts, hlt},
 };
-use core::panic::PanicInfo;
-use core::{fmt::Write, num::NonZeroUsize};
+use core::{arch::asm, fmt::Write};
+use core::{num::NonZeroUsize, panic::PanicInfo};
 use font::SPACE_MONO;
 
 pub mod efi;
 pub mod framebuffer;
 pub mod gdt;
+pub mod kernel;
 pub mod page_allocator;
 pub mod paging;
 pub mod text_writer;
@@ -103,38 +104,27 @@ unsafe extern "efiapi" fn efi_main(
             memory_map_size,
             memory_descriptor_size,
             &mut text_writer,
-        )
-    };
-
-    unsafe { init_paging_and_identity_map_all_pages_from_page_allocator() };
-
-    // make sure to identity map the framebuffer
-    {
-        assert_eq!(framebuffer.base() % 4096, 0);
-        let base = framebuffer.base();
-        for i in 0..framebuffer.size().div_ceil(4096) {
-            let page = base + i * 4096;
-            unsafe { map_page(page, page) };
-        }
+        );
     }
 
-    unsafe { enable_paging() };
+    unsafe {
+        let stack_size = 64 * 4096;
+        let stack = with_page_allocator(|alloc| {
+            alloc
+                .allocate(const { NonZeroUsize::new(16).unwrap() }, stack_size)
+                .expect("allocating the stack should succeed")
+        });
 
-    with_page_allocator(|alloc| {
-        for i in 0..10 {
-            let align = NonZeroUsize::MIN;
-            let size = 4096;
-            let addr = alloc.allocate(align, size);
-            writeln!(text_writer, "Allocated: {:x?}", addr).unwrap();
-            if i % 2 == 1
-                && let Some(addr) = addr
-            {
-                unsafe { alloc.free(addr, size) };
-            }
-        }
-    });
-
-    hlt()
+        let stack_start = stack + stack_size;
+        asm!(
+            "mov rsp, {stack_start}",
+            "mov rbp, rsp",
+            "jmp {kernel_main}",
+            stack_start = in(reg) stack_start,
+            kernel_main = sym kernel_main,
+            options(noreturn)
+        )
+    }
 }
 
 #[panic_handler]
