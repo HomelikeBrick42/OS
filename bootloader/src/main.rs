@@ -106,7 +106,7 @@ unsafe extern "efiapi" fn efi_main(
     }
 
     unsafe {
-        let stack_size = 64 * 4096;
+        let stack_size = 4 * 1024 * 1024;
         let stack = with_page_allocator(|alloc| {
             alloc
                 .allocate(const { NonZeroUsize::new(16).unwrap() }, stack_size)

@@ -110,6 +110,24 @@ impl PageAllocator {
             unsafe { self.set_allocated(address + i * 4096, false) };
         }
     }
+
+    pub fn total_pages(&self) -> usize {
+        self.blocks.iter().map(|block| block.page_count).sum()
+    }
+
+    pub fn allocated_pages(&self) -> usize {
+        self.bitmap
+            .iter()
+            .map(|byte| byte.count_ones() as usize)
+            .sum()
+    }
+
+    pub fn free_pages(&self) -> usize {
+        self.bitmap
+            .iter()
+            .map(|byte| byte.count_zeros() as usize)
+            .sum()
+    }
 }
 
 static PAGE_ALLOCATOR: Mutex<PageAllocator> = Mutex::new(PageAllocator {
