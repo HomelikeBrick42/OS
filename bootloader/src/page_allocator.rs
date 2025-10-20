@@ -1,7 +1,7 @@
 use spin::Mutex;
 
-use crate::{efi, hlt, text_writer::TextWriter};
-use core::{fmt::Write, num::NonZeroUsize};
+use crate::{efi, hlt, print::println};
+use core::num::NonZeroUsize;
 
 #[derive(Debug)]
 pub struct Block {
@@ -143,7 +143,6 @@ pub unsafe fn init_page_allocator(
     memory_map: *mut efi::MemoryDescriptor,
     memory_map_size: usize,
     memory_descriptor_size: usize,
-    text_writer: &mut TextWriter<'_>,
 ) {
     let memory_map_count = memory_map_size / memory_descriptor_size;
 
@@ -238,11 +237,7 @@ pub unsafe fn init_page_allocator(
         }
     }
     if size_so_far < required_allocator_size {
-        writeln!(
-            text_writer,
-            "Cannot find enough memory to store page allocator state"
-        )
-        .unwrap();
+        println!("Cannot find enough memory to store page allocator state");
         hlt()
     }
 

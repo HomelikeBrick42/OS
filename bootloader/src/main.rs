@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-#![feature(sync_unsafe_cell)]
+#![feature(sync_unsafe_cell, format_args_nl)]
 
 use crate::{
     framebuffer::{Color, framebuffer, init_framebuffer},
@@ -18,6 +18,7 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod kernel;
 pub mod page_allocator;
+pub mod print;
 pub mod text_writer;
 pub mod utils;
 
@@ -38,20 +39,6 @@ unsafe extern "efiapi" fn efi_main(
         b: 20,
     };
     framebuffer.fill(0, 0, width, height, framebuffer.color(background));
-
-    let mut text_writer = TextWriter {
-        x: 0,
-        y: 0,
-        left_margin: 0,
-        color: Color {
-            r: 255,
-            g: 255,
-            b: 255,
-        },
-        background,
-        font: &SPACE_MONO,
-        framebuffer,
-    };
 
     // get memory map
     let mut memory_map_size = 0;
@@ -95,14 +82,7 @@ unsafe extern "efiapi" fn efi_main(
 
     unsafe { disable_interrupts() };
 
-    unsafe {
-        init_page_allocator(
-            memory_map,
-            memory_map_size,
-            memory_descriptor_size,
-            &mut text_writer,
-        );
-    }
+    unsafe { init_page_allocator(memory_map, memory_map_size, memory_descriptor_size) };
 
     unsafe {
         let stack_size = 4 * 1024 * 1024;
@@ -138,10 +118,10 @@ fn panic(info: &PanicInfo<'_>) -> ! {
     );
 
     let mut text_writer = TextWriter {
-        x: 0,
-        y: 0,
+        x: &mut 0,
+        y: &mut 0,
         left_margin: 0,
-        color: Color {
+        text_color: Color {
             r: 255,
             g: 255,
             b: 255,

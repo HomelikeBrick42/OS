@@ -4,10 +4,10 @@ use crate::framebuffer::{Color, Framebuffer};
 use font::Font;
 
 pub struct TextWriter<'a> {
-    pub x: usize,
-    pub y: usize,
+    pub x: &'a mut usize,
+    pub y: &'a mut usize,
     pub left_margin: usize,
-    pub color: Color,
+    pub text_color: Color,
     pub background: Color,
     pub font: &'a Font<'a>,
     pub framebuffer: &'a Framebuffer,
@@ -33,21 +33,21 @@ impl Write for TextWriter<'_> {
                         + (char.y as usize + yoffset) * page.width as usize];
                     let color = self
                         .framebuffer
-                        .color(self.background.lerp(self.color, brightness));
+                        .color(self.background.lerp(self.text_color, brightness));
                     self.framebuffer.set_pixel(
-                        self.x + xoffset + char.xoffset as usize,
-                        self.y + yoffset + char.yoffset as usize,
+                        *self.x + xoffset + char.xoffset as usize,
+                        *self.y + yoffset + char.yoffset as usize,
                         color,
                     );
                 }
             }
 
-            self.x += char.xadvance as usize;
+            *self.x += char.xadvance as usize;
         }
 
         if c == '\n' {
-            self.x = self.left_margin;
-            self.y += self.font.common.line_height as usize;
+            *self.x = self.left_margin;
+            *self.y += self.font.common.line_height as usize;
         }
 
         Ok(())
