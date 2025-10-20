@@ -10,8 +10,7 @@ macro_rules! print {
     ($($tokens:tt)*) => {
         match ::core::format_args!($($tokens)*) {
             fmt => $crate::print::with_global_printer(|printer| {
-                use ::core::fmt::Write as _;
-                printer.write_fmt(fmt).unwrap()
+                ::core::fmt::Write::write_fmt(printer, fmt).unwrap()
             }),
         }
     };
@@ -24,8 +23,7 @@ macro_rules! println {
     ($($tokens:tt)*) => {
         match ::core::format_args_nl!($($tokens)*) {
             fmt => $crate::print::with_global_printer(|printer| {
-                use ::core::fmt::Write as _;
-                printer.write_fmt(fmt).unwrap()
+                ::core::fmt::Write::write_fmt(printer, fmt).unwrap()
             }),
         }
     };
