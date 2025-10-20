@@ -1,9 +1,8 @@
-use core::fmt::Write;
-
 use crate::{
     framebuffer::{Color, framebuffer},
     text_writer::TextWriter,
 };
+use core::fmt::Write;
 use font::{Font, SPACE_MONO};
 
 #[allow(unused)]
