@@ -47,6 +47,12 @@ pub extern "win64" fn kernel_main() -> ! {
 
         writeln!(
             text_writer,
+            "Total Memory: {} KiB",
+            alloc.total_pages() * 4096 / 1024
+        )
+        .unwrap();
+        writeln!(
+            text_writer,
             "Allocated Memory: {} KiB",
             alloc.allocated_pages() * 4096 / 1024
         )
