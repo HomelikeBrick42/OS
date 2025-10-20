@@ -2,11 +2,10 @@ use crate::{
     framebuffer::{Color, framebuffer},
     gdt::setup_gdt,
     page_allocator::with_page_allocator,
-    paging::{enable_paging, init_paging_and_identity_map_all_pages_from_page_allocator, map_page},
     text_writer::TextWriter,
     utils::hlt,
 };
-use core::{fmt::Write, num::NonZeroUsize};
+use core::fmt::Write;
 use font::SPACE_MONO;
 
 pub extern "win64" fn kernel_main() -> ! {
@@ -41,36 +40,23 @@ pub extern "win64" fn kernel_main() -> ! {
 
     unsafe { setup_gdt() };
 
-    unsafe { init_paging_and_identity_map_all_pages_from_page_allocator() };
-
-    // make sure to identity map the framebuffer
-    {
-        assert_eq!(framebuffer.base() % 4096, 0);
-        let base = framebuffer.base();
-        for i in 0..framebuffer.size().div_ceil(4096) {
-            let page = base + i * 4096;
-            unsafe { map_page(page, page) };
-        }
-    }
-
-    unsafe { enable_paging() };
-
     with_page_allocator(|alloc| {
         for block in alloc.blocks() {
             writeln!(text_writer, "{block:x?}").unwrap();
         }
 
-        for i in 0..10 {
-            let align = NonZeroUsize::MIN;
-            let size = 4096;
-            let addr = alloc.allocate(align, size);
-            writeln!(text_writer, "Allocated: {:x?}", addr).unwrap();
-            if i % 2 == 1
-                && let Some(addr) = addr
-            {
-                unsafe { alloc.free(addr, size) };
-            }
-        }
+        writeln!(
+            text_writer,
+            "Allocated Memory: {} KiB",
+            alloc.allocated_pages() * 4096 / 1024
+        )
+        .unwrap();
+        writeln!(
+            text_writer,
+            "Free Memory: {} KiB",
+            alloc.free_pages() * 4096 / 1024
+        )
+        .unwrap();
     });
 
     hlt()

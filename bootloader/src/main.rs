@@ -18,7 +18,6 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod kernel;
 pub mod page_allocator;
-pub mod paging;
 pub mod text_writer;
 pub mod utils;
 
