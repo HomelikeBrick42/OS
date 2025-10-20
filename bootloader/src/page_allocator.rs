@@ -253,6 +253,7 @@ pub unsafe fn init_page_allocator(
     };
 
     {
+        let mut bitmap_index = 0;
         let mut block_index = 0usize;
         for i in 0..memory_map_count {
             let memory_descriptor = unsafe { &*memory_map.byte_add(i * memory_descriptor_size) };
@@ -260,10 +261,11 @@ pub unsafe fn init_page_allocator(
             let block = &mut blocks[block_index];
             if block.page_count == 0 {
                 block.start_address = memory_descriptor.physical_start;
-                block.bitmap_start = i;
+                block.bitmap_start = bitmap_index;
             }
 
             block.page_count += memory_descriptor.number_of_pages;
+            bitmap_index += memory_descriptor.number_of_pages;
 
             if i + 1 < memory_map_count {
                 let next_memory_descriptor =
