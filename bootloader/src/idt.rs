@@ -1,4 +1,7 @@
-use crate::{print::println, utils::error_screen};
+use crate::{
+    print::println,
+    utils::{error_screen, hlt},
+};
 use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write};
 
 #[repr(C, packed)]
@@ -44,27 +47,11 @@ pub unsafe fn setup_idt() {
         let idt = unsafe { &mut *IDT.get() };
 
         {
-            let double_fault = &mut idt.entries[0x08];
-            double_fault.set_offset(double_fault_handler as usize);
-            double_fault.selector = 0x08;
-            double_fault.ist = 0;
-            double_fault.types_attributes = 0b1000_1110;
-        }
-
-        {
             let general_protection = &mut idt.entries[0x0D];
             general_protection.set_offset(general_protection_handler as usize);
             general_protection.selector = 0x08;
             general_protection.ist = 0;
             general_protection.types_attributes = 0b1000_1110;
-        }
-
-        {
-            let page_fault = &mut idt.entries[0x0E];
-            page_fault.set_offset(page_fault_handler as usize);
-            page_fault.selector = 0x08;
-            page_fault.ist = 0;
-            page_fault.types_attributes = 0b1000_1110;
         }
     }
 
@@ -97,18 +84,6 @@ struct InterruptStackFrame {
     pub ss: usize,
 }
 
-extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame, error_code: u64) {
-    error_screen(|text_writer| {
-        writeln!(text_writer, "Double Fault:").unwrap();
-        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
-        writeln!(text_writer, "{error_code:x?}").unwrap();
-    });
-
-    loop {
-        core::hint::spin_loop();
-    }
-}
-
 extern "x86-interrupt" fn general_protection_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
@@ -119,19 +94,5 @@ extern "x86-interrupt" fn general_protection_handler(
         writeln!(text_writer, "{error_code:x?}").unwrap();
     });
 
-    loop {
-        core::hint::spin_loop();
-    }
-}
-
-extern "x86-interrupt" fn page_fault_handler(stack_frame: InterruptStackFrame, error_code: u64) {
-    error_screen(|text_writer| {
-        writeln!(text_writer, "Page Fault:").unwrap();
-        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
-        writeln!(text_writer, "{error_code:x?}").unwrap();
-    });
-
-    loop {
-        core::hint::spin_loop();
-    }
+    hlt()
 }
