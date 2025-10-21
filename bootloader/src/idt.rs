@@ -1,8 +1,9 @@
 use crate::{
+    gdt::Gdt,
     print::println,
     utils::{error_screen, hlt},
 };
-use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write};
+use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write, mem::offset_of};
 
 #[repr(C, packed)]
 struct IdtDescriptor {
@@ -12,6 +13,7 @@ struct IdtDescriptor {
 
 const _: () = assert!(size_of::<IdtDescriptor>() == 10);
 
+#[derive(Debug)]
 #[repr(C, packed)]
 struct Entry {
     pub offset0: u16,
@@ -42,20 +44,26 @@ static IDT: SyncUnsafeCell<Idt> = SyncUnsafeCell::new(Idt {
     entries: unsafe { core::mem::zeroed() },
 });
 
+#[unsafe(no_mangle)]
 pub unsafe fn setup_idt() {
+    println!("IDT = {:p}", IDT.get());
+
     {
         let idt = unsafe { &mut *IDT.get() };
 
         {
             let general_protection = &mut idt.entries[0x0D];
             general_protection.set_offset(general_protection_handler as usize);
-            general_protection.selector = 0x08;
+            general_protection.selector = offset_of!(Gdt, kernel_code) as u16;
             general_protection.ist = 0;
             general_protection.types_attributes = 0b1000_1110;
+            if true {
+                println!("handler = {:x}", general_protection_handler as usize);
+                println!("{general_protection:#x?}");
+                hlt()
+            }
         }
     }
-
-    println!("IDT = {:p}", IDT.get());
 
     let descriptor = IdtDescriptor {
         size: (size_of::<Idt>() - 1) as _,
