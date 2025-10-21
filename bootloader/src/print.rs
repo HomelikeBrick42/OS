@@ -81,23 +81,23 @@ impl Write for GlobalPrinter {
     }
 }
 
-pub fn with_global_printer<R>(f: impl FnOnce(&mut GlobalPrinter) -> R) -> R {
-    static GLOBAL_PRINTER: spin::Mutex<GlobalPrinter> = spin::Mutex::new(GlobalPrinter {
-        x: 0,
-        y: 0,
-        left_margin: 0,
-        text_color: Color {
-            r: 255,
-            g: 255,
-            b: 255,
-        },
-        background_color: Color {
-            r: 50,
-            g: 50,
-            b: 50,
-        },
-        font: &SPACE_MONO,
-    });
+static GLOBAL_PRINTER: spin::Mutex<GlobalPrinter> = spin::Mutex::new(GlobalPrinter {
+    x: 0,
+    y: 0,
+    left_margin: 0,
+    text_color: Color {
+        r: 255,
+        g: 255,
+        b: 255,
+    },
+    background_color: Color {
+        r: 50,
+        g: 50,
+        b: 50,
+    },
+    font: &SPACE_MONO,
+});
 
+pub fn with_global_printer<R>(f: impl FnOnce(&mut GlobalPrinter) -> R) -> R {
     f(&mut GLOBAL_PRINTER.lock())
 }

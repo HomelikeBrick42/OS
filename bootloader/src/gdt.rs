@@ -1,3 +1,4 @@
+use crate::print::println;
 use core::{arch::asm, mem::offset_of};
 
 #[repr(C, packed)]
@@ -59,6 +60,8 @@ pub unsafe fn setup_gdt() {
         size: (size_of::<Gdt>() - 1) as _,
         offset: (&raw const GDT).addr(),
     };
+
+    println!("GDT = {:p}", &raw const GDT);
 
     // load the gdt into the gdtr resgister
     unsafe { asm!("lgdt [{}]", in(reg) &raw const descriptor) };

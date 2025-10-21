@@ -1,10 +1,12 @@
 use crate::{
     framebuffer::framebuffer,
     gdt::setup_gdt,
+    idt::{disable_interrupts, enable_interrupts, setup_idt},
     page_allocator::with_page_allocator,
     print::{println, with_global_printer},
     utils::hlt,
 };
+use core::arch::asm;
 
 pub extern "win64" fn kernel_main() -> ! {
     let framebuffer = framebuffer();
@@ -25,11 +27,11 @@ pub extern "win64" fn kernel_main() -> ! {
 
     unsafe { setup_gdt() };
 
-    with_page_allocator(|alloc| {
-        for block in alloc.blocks() {
-            println!("{block:x?}");
-        }
+    unsafe { disable_interrupts() };
+    unsafe { setup_idt() };
+    unsafe { enable_interrupts() };
 
+    with_page_allocator(|alloc| {
         println!("Total Memory: {} KiB", alloc.total_pages() * 4096 / 1024);
         println!(
             "Allocated Memory: {} KiB",
@@ -37,6 +39,8 @@ pub extern "win64" fn kernel_main() -> ! {
         );
         println!("Free Memory: {} KiB", alloc.free_pages() * 4096 / 1024);
     });
+
+    unsafe { asm!("int 0x0D") };
 
     hlt()
 }
