@@ -5,15 +5,15 @@ use crate::{
 use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write};
 
 #[repr(C, packed)]
-pub struct IdtDescriptor {
+struct IdtDescriptor {
     pub size: u16,
-    pub offset: usize,
+    pub offset: *const Idt,
 }
 
 const _: () = assert!(size_of::<IdtDescriptor>() == 10);
 
 #[repr(C, packed)]
-pub struct Entry {
+struct Entry {
     pub offset0: u16,
     pub selector: u16,
     pub ist: u8,
@@ -59,7 +59,7 @@ pub unsafe fn setup_idt() {
 
     let descriptor = IdtDescriptor {
         size: (size_of::<Idt>() - 1) as _,
-        offset: IDT.get().expose_provenance(),
+        offset: IDT.get(),
     };
 
     // load the idt into the idtr resgister

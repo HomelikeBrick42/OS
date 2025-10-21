@@ -2,14 +2,15 @@ use crate::print::println;
 use core::{arch::asm, mem::offset_of};
 
 #[repr(C, packed)]
-pub struct GdtDescriptor {
+struct GdtDescriptor {
     pub size: u16,
-    pub offset: usize,
+    pub offset: *const Gdt,
 }
 
 const _: () = assert!(size_of::<GdtDescriptor>() == 10);
 
-pub struct Entry {
+#[repr(C, packed)]
+struct Entry {
     pub limit0: u16,
     pub base0: u16,
     pub base1: u8,
@@ -58,7 +59,7 @@ static GDT: Gdt = Gdt {
 pub unsafe fn setup_gdt() {
     let descriptor = GdtDescriptor {
         size: (size_of::<Gdt>() - 1) as _,
-        offset: (&raw const GDT).expose_provenance(),
+        offset: &raw const GDT,
     };
 
     println!("GDT = {:p}", &raw const GDT);
