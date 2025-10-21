@@ -58,7 +58,7 @@ static GDT: Gdt = Gdt {
 pub unsafe fn setup_gdt() {
     let descriptor = GdtDescriptor {
         size: (size_of::<Gdt>() - 1) as _,
-        offset: (&raw const GDT).addr(),
+        offset: (&raw const GDT).expose_provenance(),
     };
 
     println!("GDT = {:p}", &raw const GDT);

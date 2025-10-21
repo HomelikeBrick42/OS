@@ -31,6 +31,8 @@ pub extern "win64" fn kernel_main() -> ! {
     unsafe { setup_idt() };
     unsafe { enable_interrupts() };
 
+    unsafe { asm!("int 0x0D") };
+
     with_page_allocator(|alloc| {
         println!("Total Memory: {} KiB", alloc.total_pages() * 4096 / 1024);
         println!(
@@ -39,8 +41,6 @@ pub extern "win64" fn kernel_main() -> ! {
         );
         println!("Free Memory: {} KiB", alloc.free_pages() * 4096 / 1024);
     });
-
-    unsafe { asm!("int 0x0D") };
 
     hlt()
 }

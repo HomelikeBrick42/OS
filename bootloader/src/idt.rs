@@ -59,7 +59,7 @@ pub unsafe fn setup_idt() {
 
     let descriptor = IdtDescriptor {
         size: (size_of::<Idt>() - 1) as _,
-        offset: IDT.get().addr(),
+        offset: IDT.get().expose_provenance(),
     };
 
     // load the idt into the idtr resgister
