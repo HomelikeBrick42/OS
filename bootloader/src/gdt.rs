@@ -9,7 +9,7 @@ struct GdtDescriptor {
 
 const _: () = assert!(size_of::<GdtDescriptor>() == 10);
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct Entry {
     pub limit0: u16,
     pub base0: u16,
@@ -21,12 +21,14 @@ pub struct Entry {
 
 const _: () = assert!(size_of::<Entry>() == 8);
 
-#[repr(C, align(0x1000))]
+#[repr(C)]
 pub struct Gdt {
     pub null: Entry,
     pub kernel_code: Entry,
     pub kernel_data: Entry,
 }
+
+const _: () = assert!(size_of::<Gdt>().is_multiple_of(size_of::<Entry>()));
 
 #[allow(clippy::unusual_byte_groupings)]
 static GDT: Gdt = Gdt {

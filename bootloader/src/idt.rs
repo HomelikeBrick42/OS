@@ -5,6 +5,7 @@ use crate::{
 };
 use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write, mem::offset_of};
 
+#[derive(Debug)]
 #[repr(C, packed)]
 struct IdtDescriptor {
     pub size: u16,
@@ -14,7 +15,7 @@ struct IdtDescriptor {
 const _: () = assert!(size_of::<IdtDescriptor>() == 10);
 
 #[derive(Debug)]
-#[repr(C, packed)]
+#[repr(C)]
 struct Entry {
     pub offset0: u16,
     pub selector: u16,
@@ -25,6 +26,8 @@ struct Entry {
     pub reserved: u32,
 }
 
+const _: () = assert!(size_of::<Entry>() == 16);
+
 impl Entry {
     pub const fn set_offset(&mut self, offset: usize) {
         self.offset0 = (offset & 0x000000000000FFFF) as u16;
@@ -33,12 +36,12 @@ impl Entry {
     }
 }
 
-const _: () = assert!(size_of::<Entry>() == 16);
-
-#[repr(C, align(0x1000))]
+#[repr(C)]
 pub struct Idt {
     entries: [Entry; 256],
 }
+
+const _: () = assert!(size_of::<Idt>() == 0x1000);
 
 static IDT: SyncUnsafeCell<Idt> = SyncUnsafeCell::new(Idt {
     entries: unsafe { core::mem::zeroed() },
