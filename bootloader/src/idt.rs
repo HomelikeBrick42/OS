@@ -27,11 +27,41 @@ struct Entry {
 
 const _: () = assert!(size_of::<Entry>() == 16);
 
+#[expect(unused)]
+enum InterruptType {
+    Interrupt,
+    Trap,
+}
+
 impl Entry {
     pub const fn set_offset(&mut self, offset: usize) {
         self.offset0 = (offset & 0x000000000000FFFF) as u16;
         self.offset1 = ((offset & 0x00000000FFFF0000) >> 16) as u16;
         self.offset2 = ((offset & 0xFFFFFFFF00000000) >> 32) as u32;
+    }
+
+    fn set_handler_(&mut self, handler: usize, interrupt_type: InterruptType) {
+        self.set_offset(handler);
+        self.selector = offset_of!(Gdt, kernel_code) as u16;
+        self.ist = 0;
+        self.types_attributes = match interrupt_type {
+            InterruptType::Interrupt => 0b1000_1110,
+            InterruptType::Trap => 0b1000_1111,
+        };
+    }
+
+    pub fn set_handler_with_error(
+        &mut self,
+        handler: extern "x86-interrupt" fn(InterruptStackFrame, u64),
+    ) {
+        self.set_handler_(handler as usize, InterruptType::Interrupt);
+    }
+
+    pub fn set_abort_handler_with_error(
+        &mut self,
+        handler: extern "x86-interrupt" fn(InterruptStackFrame, u64) -> !,
+    ) {
+        self.set_handler_(handler as usize, InterruptType::Interrupt);
     }
 }
 
@@ -43,21 +73,26 @@ pub struct Idt {
 const _: () = assert!(size_of::<Idt>() == 0x1000);
 
 static IDT: SyncUnsafeCell<Idt> = SyncUnsafeCell::new(Idt {
-    entries: unsafe { core::mem::zeroed() },
+    entries: [const {
+        Entry {
+            offset0: !0,
+            selector: 0,
+            ist: 0,
+            types_attributes: 0,
+            offset1: !0,
+            offset2: !0,
+            reserved: 0,
+        }
+    }; _],
 });
 
-#[unsafe(no_mangle)]
 pub unsafe fn setup_idt() {
     {
         let idt = unsafe { &mut *IDT.get() };
 
-        {
-            let general_protection = &mut idt.entries[0x0D];
-            general_protection.set_offset(general_protection_handler as usize);
-            general_protection.selector = offset_of!(Gdt, kernel_code) as u16;
-            general_protection.ist = 0;
-            general_protection.types_attributes = 0b1000_1110;
-        }
+        idt.entries[0x08].set_abort_handler_with_error(double_fault_handler);
+        idt.entries[0x0D].set_handler_with_error(general_protection_handler);
+        idt.entries[0x0E].set_handler_with_error(page_fault_handler);
     }
 
     let descriptor = IdtDescriptor {
@@ -87,6 +122,19 @@ struct InterruptStackFrame {
     pub ss: usize,
 }
 
+extern "x86-interrupt" fn double_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: u64,
+) -> ! {
+    error_screen(|text_writer| {
+        writeln!(text_writer, "Double Fault:").unwrap();
+        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
+        writeln!(text_writer, "{error_code:#x}").unwrap();
+    });
+
+    hlt()
+}
+
 extern "x86-interrupt" fn general_protection_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
@@ -94,7 +142,17 @@ extern "x86-interrupt" fn general_protection_handler(
     error_screen(|text_writer| {
         writeln!(text_writer, "General Protection Fault:").unwrap();
         writeln!(text_writer, "{stack_frame:#x?}").unwrap();
-        writeln!(text_writer, "{error_code:x?}").unwrap();
+        writeln!(text_writer, "{error_code:#x}").unwrap();
+    });
+
+    hlt()
+}
+
+extern "x86-interrupt" fn page_fault_handler(stack_frame: InterruptStackFrame, error_code: u64) {
+    error_screen(|text_writer| {
+        writeln!(text_writer, "Page Fault:").unwrap();
+        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
+        writeln!(text_writer, "{error_code:#x}").unwrap();
     });
 
     hlt()
