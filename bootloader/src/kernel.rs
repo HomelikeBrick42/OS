@@ -6,7 +6,6 @@ use crate::{
     print::{println, with_global_printer},
     utils::hlt,
 };
-use core::arch::asm;
 
 pub extern "win64" fn kernel_main() -> ! {
     let framebuffer = framebuffer();
@@ -25,13 +24,10 @@ pub extern "win64" fn kernel_main() -> ! {
         framebuffer.color(background_color),
     );
 
-    unsafe { setup_gdt() };
-
     unsafe { disable_interrupts() };
+    unsafe { setup_gdt() };
     unsafe { setup_idt() };
     unsafe { enable_interrupts() };
-
-    unsafe { asm!("int 0x0D") };
 
     with_page_allocator(|alloc| {
         println!("Total Memory: {} KiB", alloc.total_pages() * 4096 / 1024);

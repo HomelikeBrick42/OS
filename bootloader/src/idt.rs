@@ -1,6 +1,5 @@
 use crate::{
     gdt::Gdt,
-    print::println,
     utils::{error_screen, hlt},
 };
 use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write, mem::offset_of};
@@ -49,8 +48,6 @@ static IDT: SyncUnsafeCell<Idt> = SyncUnsafeCell::new(Idt {
 
 #[unsafe(no_mangle)]
 pub unsafe fn setup_idt() {
-    println!("IDT = {:p}", IDT.get());
-
     {
         let idt = unsafe { &mut *IDT.get() };
 
@@ -60,11 +57,6 @@ pub unsafe fn setup_idt() {
             general_protection.selector = offset_of!(Gdt, kernel_code) as u16;
             general_protection.ist = 0;
             general_protection.types_attributes = 0b1000_1110;
-            if true {
-                println!("handler = {:x}", general_protection_handler as usize);
-                println!("{general_protection:#x?}");
-                hlt()
-            }
         }
     }
 

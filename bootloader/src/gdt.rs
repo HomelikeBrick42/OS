@@ -1,4 +1,3 @@
-use crate::print::println;
 use core::{arch::asm, mem::offset_of};
 
 #[repr(C, packed)]
@@ -45,7 +44,7 @@ static GDT: Gdt = Gdt {
         base0: 0x0000,
         base1: 0x00,
         access_byte: 0b1_00_1_1_0_1_1,
-        limit1_flags: 0xF0 | 0b1010,
+        limit1_flags: (0b1010 << 4) | 0x0F,
         base2: 0x00,
     },
     kernel_data: Entry {
@@ -53,7 +52,7 @@ static GDT: Gdt = Gdt {
         base0: 0x0000,
         base1: 0x00,
         access_byte: 0b1_00_1_0_0_1_1,
-        limit1_flags: 0xF0 | 0b1010,
+        limit1_flags: (0b1010 << 4) | 0x0F,
         base2: 0x00,
     },
 };
@@ -63,8 +62,6 @@ pub unsafe fn setup_gdt() {
         size: (size_of::<Gdt>() - 1) as _,
         offset: &raw const GDT,
     };
-
-    println!("GDT = {:p}", &raw const GDT);
 
     // load the gdt into the gdtr resgister
     unsafe { asm!("lgdt [{}]", in(reg) &raw const descriptor) };
