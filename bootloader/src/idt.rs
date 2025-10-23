@@ -122,10 +122,7 @@ pub unsafe fn enable_interrupts() {
 }
 
 pub unsafe fn with_idt_entry<R>(interrupt: u8, f: impl FnOnce(&mut Entry) -> R) -> R {
-    unsafe { disable_interrupts() };
-    let value = f(unsafe { &mut (*IDT.get()).entries[interrupt as usize] });
-    unsafe { enable_interrupts() };
-    value
+    f(unsafe { &mut (*IDT.get()).entries[interrupt as usize] })
 }
 
 #[derive(Debug)]
