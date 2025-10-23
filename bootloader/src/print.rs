@@ -1,5 +1,6 @@
 use crate::{
     framebuffer::{Color, framebuffer},
+    idt::{disable_interrupts, enable_interrupts, is_idt_setup},
     text_writer::TextWriter,
 };
 use core::fmt::Write;
@@ -99,5 +100,12 @@ static GLOBAL_PRINTER: spin::Mutex<GlobalPrinter> = spin::Mutex::new(GlobalPrint
 });
 
 pub fn with_global_printer<R>(f: impl FnOnce(&mut GlobalPrinter) -> R) -> R {
-    f(&mut GLOBAL_PRINTER.lock())
+    if is_idt_setup() {
+        unsafe { disable_interrupts() };
+    }
+    let value = f(&mut GLOBAL_PRINTER.lock());
+    if is_idt_setup() {
+        unsafe { enable_interrupts() };
+    }
+    value
 }

@@ -1,4 +1,8 @@
-use crate::{efi, hlt, print::println};
+use crate::{
+    efi, hlt,
+    idt::{disable_interrupts, enable_interrupts, is_idt_setup},
+    print::println,
+};
 use core::num::NonZeroUsize;
 
 #[derive(Debug)]
@@ -134,7 +138,14 @@ static PAGE_ALLOCATOR: spin::Mutex<PageAllocator> = spin::Mutex::new(PageAllocat
 });
 
 pub fn with_page_allocator<R>(f: impl FnOnce(&mut PageAllocator) -> R) -> R {
-    f(&mut PAGE_ALLOCATOR.lock())
+    if is_idt_setup() {
+        unsafe { disable_interrupts() };
+    }
+    let value = f(&mut PAGE_ALLOCATOR.lock());
+    if is_idt_setup() {
+        unsafe { enable_interrupts() };
+    }
+    value
 }
 
 pub unsafe fn init_page_allocator(

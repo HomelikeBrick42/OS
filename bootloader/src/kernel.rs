@@ -3,8 +3,8 @@ use crate::{
     framebuffer::framebuffer,
     gdt::setup_gdt,
     idt::{
-        InterruptStackFrame, InterruptType, disable_interrupts, enable_interrupts, setup_idt,
-        with_idt_entry,
+        InterruptStackFrame, InterruptType, disable_interrupts, enable_interrupts, set_idt_setup,
+        setup_idt, with_idt_entry,
     },
     page_allocator::with_page_allocator,
     print::{println, with_global_printer},
@@ -45,6 +45,7 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
     io_wait();
 
     unsafe { enable_interrupts() };
+    unsafe { set_idt_setup() };
 
     with_page_allocator(|alloc| {
         println!("Total Memory: {} KiB", alloc.total_pages() * 4096 / 1024);
@@ -62,7 +63,6 @@ unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
     let scancode = unsafe { inb(0x60) };
     io_wait();
 
-    // this is bad because it involves locks, but who cares for now
     println!("Scancode: {}", scancode);
 
     unsafe { pic1_end() };

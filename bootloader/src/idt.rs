@@ -2,7 +2,13 @@ use crate::{
     gdt::Gdt,
     utils::{error_screen, hlt},
 };
-use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write, mem::offset_of};
+use core::{
+    arch::asm,
+    cell::SyncUnsafeCell,
+    fmt::Write,
+    mem::offset_of,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 #[derive(Debug)]
 #[repr(C, packed)]
@@ -181,4 +187,14 @@ unsafe extern "x86-interrupt" fn page_fault_handler(
     });
 
     hlt()
+}
+
+static IDT_SETUP: AtomicBool = AtomicBool::new(false);
+
+pub unsafe fn set_idt_setup() {
+    IDT_SETUP.store(true, Ordering::Release);
+}
+
+pub fn is_idt_setup() -> bool {
+    IDT_SETUP.load(Ordering::Acquire)
 }
