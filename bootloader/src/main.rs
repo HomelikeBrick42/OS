@@ -21,6 +21,7 @@ pub mod page_allocator;
 pub mod print;
 pub mod text_writer;
 pub mod utils;
+pub mod drivers;
 
 #[unsafe(no_mangle)]
 unsafe extern "efiapi" fn efi_main(
