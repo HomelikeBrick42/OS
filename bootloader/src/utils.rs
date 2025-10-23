@@ -1,10 +1,47 @@
+use crate::{
+    framebuffer::{Color, framebuffer},
+    text_writer::TextWriter,
+};
 use core::arch::asm;
 use font::SPACE_MONO;
-use crate::{framebuffer::{framebuffer, Color}, text_writer::TextWriter};
 
 pub fn hlt() -> ! {
     loop {
         unsafe { asm!("hlt") };
+    }
+}
+
+pub unsafe fn inb(port: u16) -> u8 {
+    let value;
+    unsafe {
+        asm!(
+            "in al, dx",
+            in("dx") port,
+            out("al") value,
+            options(nomem, nostack)
+        );
+    }
+    value
+}
+
+pub unsafe fn outb(port: u16, value: u8) {
+    unsafe {
+        asm!(
+            "out dx, al",
+            in("dx") port,
+            in("al") value,
+            options(nomem, nostack)
+        );
+    }
+}
+
+pub fn io_wait() {
+    unsafe {
+        asm!(
+            "out 0x80, al",
+            in("al") 0u8,
+            options(nomem, nostack)
+        );
     }
 }
 

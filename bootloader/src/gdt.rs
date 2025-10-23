@@ -64,7 +64,7 @@ pub unsafe fn setup_gdt() {
     };
 
     // load the gdt into the gdtr resgister
-    unsafe { asm!("lgdt [{}]", in(reg) &raw const descriptor) };
+    unsafe { asm!("lgdt [{}]", in(reg) &raw const descriptor, options(nostack)) };
 
     unsafe { reload_kernel_segments() };
 }

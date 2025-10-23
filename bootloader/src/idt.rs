@@ -110,15 +110,15 @@ pub unsafe fn setup_idt() {
     };
 
     // load the idt into the idtr resgister
-    unsafe { asm!("lidt [{}]", in(reg) &raw const descriptor) };
+    unsafe { asm!("lidt [{}]", in(reg) &raw const descriptor, options(nostack)) };
 }
 
 pub unsafe fn disable_interrupts() {
-    unsafe { asm!("cli") };
+    unsafe { asm!("cli", options(nomem, nostack)) };
 }
 
 pub unsafe fn enable_interrupts() {
-    unsafe { asm!("sti") };
+    unsafe { asm!("sti", options(nomem, nostack)) };
 }
 
 pub unsafe fn with_idt_entry<R>(interrupt: u8, f: impl FnOnce(&mut Entry) -> R) -> R {
