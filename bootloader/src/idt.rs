@@ -1,14 +1,8 @@
 use crate::{
     gdt::Gdt,
-    utils::{error_screen, hlt},
+    utils::{error_screen, get_flags, hlt},
 };
-use core::{
-    arch::asm,
-    cell::SyncUnsafeCell,
-    fmt::Write,
-    mem::offset_of,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write, mem::offset_of};
 
 #[derive(Debug)]
 #[repr(C, packed)]
@@ -119,20 +113,24 @@ pub unsafe fn setup_idt() {
     unsafe { asm!("lidt [{}]", in(reg) &raw const descriptor, options(nostack)) };
 }
 
-static INTERRUPTS_ENABLED: AtomicBool = AtomicBool::new(false);
+pub fn is_interrupts_enabled() -> bool {
+    let flags = get_flags();
+    flags & (1 << 9) != 0
+}
 
-pub unsafe fn disable_interrupts() -> bool {
+pub unsafe fn disable_interrupts() {
     unsafe { asm!("cli", options(nomem, nostack)) };
-    INTERRUPTS_ENABLED.swap(true, Ordering::SeqCst)
 }
 
 pub unsafe fn enable_interrupts() {
     unsafe { asm!("sti", options(nomem, nostack)) };
-    INTERRUPTS_ENABLED.store(false, Ordering::SeqCst);
 }
 
 pub fn with_disabled_interrupts<R>(f: impl FnOnce() -> R) -> R {
-    let was_interrupts_enabled = unsafe { disable_interrupts() };
+    let was_interrupts_enabled = is_interrupts_enabled();
+    if was_interrupts_enabled {
+        unsafe { disable_interrupts() };
+    }
     let value = f();
     if was_interrupts_enabled {
         unsafe { enable_interrupts() };

@@ -45,6 +45,19 @@ pub fn io_wait() {
     }
 }
 
+pub fn get_flags() -> u64 {
+    let flags;
+    unsafe {
+        asm!(
+            "pushf",
+            "pop rax",
+            out("rax") flags,
+            options(nomem)
+        );
+    }
+    flags
+}
+
 pub fn error_screen<R>(f: impl FnOnce(&mut TextWriter<'_>) -> R) -> R {
     let framebuffer = framebuffer();
 
