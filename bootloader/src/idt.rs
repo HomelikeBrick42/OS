@@ -139,7 +139,7 @@ pub fn with_disabled_interrupts<R>(f: impl FnOnce() -> R) -> R {
 }
 
 pub unsafe fn with_idt_entry<R>(interrupt: u8, f: impl FnOnce(&mut Entry) -> R) -> R {
-    f(unsafe { &mut (*IDT.get()).entries[interrupt as usize] })
+    with_disabled_interrupts(|| f(unsafe { &mut (*IDT.get()).entries[interrupt as usize] }))
 }
 
 #[derive(Debug)]
