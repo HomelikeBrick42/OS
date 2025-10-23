@@ -51,7 +51,7 @@ impl Entry {
 
     pub fn set_handler(
         &mut self,
-        handler: extern "x86-interrupt" fn(InterruptStackFrame),
+        handler: unsafe extern "x86-interrupt" fn(InterruptStackFrame),
         interrupt_type: InterruptType,
     ) {
         self.set_handler_(handler as usize, interrupt_type);
@@ -59,14 +59,14 @@ impl Entry {
 
     pub fn set_handler_with_error(
         &mut self,
-        handler: extern "x86-interrupt" fn(InterruptStackFrame, u64),
+        handler: unsafe extern "x86-interrupt" fn(InterruptStackFrame, u64),
     ) {
         self.set_handler_(handler as usize, InterruptType::Interrupt);
     }
 
     pub fn set_abort_handler_with_error(
         &mut self,
-        handler: extern "x86-interrupt" fn(InterruptStackFrame, u64) -> !,
+        handler: unsafe extern "x86-interrupt" fn(InterruptStackFrame, u64) -> !,
     ) {
         self.set_handler_(handler as usize, InterruptType::Interrupt);
     }
@@ -135,7 +135,7 @@ pub struct InterruptStackFrame {
     pub ss: usize,
 }
 
-extern "x86-interrupt" fn debug_break_handler(stack_frame: InterruptStackFrame) {
+unsafe extern "x86-interrupt" fn debug_break_handler(stack_frame: InterruptStackFrame) {
     error_screen(|text_writer| {
         writeln!(text_writer, "Debug Break:").unwrap();
         writeln!(text_writer, "{stack_frame:#x?}").unwrap();
@@ -144,7 +144,7 @@ extern "x86-interrupt" fn debug_break_handler(stack_frame: InterruptStackFrame) 
     hlt()
 }
 
-extern "x86-interrupt" fn double_fault_handler(
+unsafe extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) -> ! {
@@ -157,7 +157,7 @@ extern "x86-interrupt" fn double_fault_handler(
     hlt()
 }
 
-extern "x86-interrupt" fn general_protection_handler(
+unsafe extern "x86-interrupt" fn general_protection_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
@@ -170,7 +170,10 @@ extern "x86-interrupt" fn general_protection_handler(
     hlt()
 }
 
-extern "x86-interrupt" fn page_fault_handler(stack_frame: InterruptStackFrame, error_code: u64) {
+unsafe extern "x86-interrupt" fn page_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: u64,
+) {
     error_screen(|text_writer| {
         writeln!(text_writer, "Page Fault:").unwrap();
         writeln!(text_writer, "{stack_frame:#x?}").unwrap();
