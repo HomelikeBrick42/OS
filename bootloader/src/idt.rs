@@ -15,7 +15,7 @@ const _: () = assert!(size_of::<IdtDescriptor>() == 10);
 
 #[derive(Debug)]
 #[repr(C)]
-struct Entry {
+pub struct Entry {
     pub offset0: u16,
     pub selector: u16,
     pub ist: u8,
@@ -27,13 +27,13 @@ struct Entry {
 
 const _: () = assert!(size_of::<Entry>() == 16);
 
-enum InterruptType {
+pub enum InterruptType {
     Interrupt,
     Trap,
 }
 
 impl Entry {
-    pub const fn set_offset(&mut self, offset: usize) {
+    fn set_offset(&mut self, offset: usize) {
         self.offset0 = (offset & 0x000000000000FFFF) as u16;
         self.offset1 = ((offset & 0x00000000FFFF0000) >> 16) as u16;
         self.offset2 = ((offset & 0xFFFFFFFF00000000) >> 32) as u32;
@@ -121,9 +121,16 @@ pub unsafe fn enable_interrupts() {
     unsafe { asm!("sti") };
 }
 
+pub unsafe fn with_idt_entry<R>(interrupt: u8, f: impl FnOnce(&mut Entry) -> R) -> R {
+    unsafe { disable_interrupts() };
+    let value = f(unsafe { &mut (*IDT.get()).entries[interrupt as usize] });
+    unsafe { enable_interrupts() };
+    value
+}
+
 #[derive(Debug)]
 #[repr(C)]
-struct InterruptStackFrame {
+pub struct InterruptStackFrame {
     pub ip: usize,
     pub cs: usize,
     pub flags: usize,
