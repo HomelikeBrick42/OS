@@ -119,12 +119,25 @@ pub unsafe fn setup_idt() {
     unsafe { asm!("lidt [{}]", in(reg) &raw const descriptor, options(nostack)) };
 }
 
-pub unsafe fn disable_interrupts() {
+static INTERRUPTS_ENABLED: AtomicBool = AtomicBool::new(false);
+
+pub unsafe fn disable_interrupts() -> bool {
     unsafe { asm!("cli", options(nomem, nostack)) };
+    INTERRUPTS_ENABLED.swap(true, Ordering::SeqCst)
 }
 
 pub unsafe fn enable_interrupts() {
     unsafe { asm!("sti", options(nomem, nostack)) };
+    INTERRUPTS_ENABLED.store(false, Ordering::SeqCst);
+}
+
+pub fn with_disabled_interrupts<R>(f: impl FnOnce() -> R) -> R {
+    let was_interrupts_enabled = unsafe { disable_interrupts() };
+    let value = f();
+    if was_interrupts_enabled {
+        unsafe { enable_interrupts() };
+    }
+    value
 }
 
 pub unsafe fn with_idt_entry<R>(interrupt: u8, f: impl FnOnce(&mut Entry) -> R) -> R {
@@ -187,14 +200,4 @@ unsafe extern "x86-interrupt" fn page_fault_handler(
     });
 
     hlt()
-}
-
-static IDT_SETUP: AtomicBool = AtomicBool::new(false);
-
-pub unsafe fn set_idt_setup() {
-    IDT_SETUP.store(true, Ordering::Release);
-}
-
-pub fn is_idt_setup() -> bool {
-    IDT_SETUP.load(Ordering::Acquire)
 }

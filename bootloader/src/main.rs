@@ -12,6 +12,7 @@ use crate::{
 use core::{arch::asm, fmt::Write};
 use core::{num::NonZeroUsize, panic::PanicInfo};
 
+pub mod drivers;
 pub mod efi;
 pub mod framebuffer;
 pub mod gdt;
@@ -19,9 +20,11 @@ pub mod idt;
 pub mod kernel;
 pub mod page_allocator;
 pub mod print;
+pub mod rust_global_allocators;
 pub mod text_writer;
 pub mod utils;
-pub mod drivers;
+
+extern crate alloc;
 
 #[unsafe(no_mangle)]
 unsafe extern "efiapi" fn efi_main(

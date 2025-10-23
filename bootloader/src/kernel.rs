@@ -3,15 +3,17 @@ use crate::{
     framebuffer::framebuffer,
     gdt::setup_gdt,
     idt::{
-        InterruptStackFrame, InterruptType, disable_interrupts, enable_interrupts, set_idt_setup,
-        setup_idt, with_idt_entry,
+        InterruptStackFrame, InterruptType, disable_interrupts, enable_interrupts, setup_idt,
+        with_idt_entry,
     },
-    page_allocator::with_page_allocator,
     print::{println, with_global_printer},
     utils::{hlt, inb, io_wait, outb},
 };
+use alloc::vec;
 
 pub unsafe extern "win64" fn kernel_main() -> ! {
+    unsafe { disable_interrupts() };
+
     let framebuffer = framebuffer();
 
     let background_color = with_global_printer(|printer| {
@@ -28,7 +30,6 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
         framebuffer.color(background_color),
     );
 
-    unsafe { disable_interrupts() };
     unsafe { setup_gdt() };
     unsafe { setup_idt() };
 
@@ -45,16 +46,14 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
     io_wait();
 
     unsafe { enable_interrupts() };
-    unsafe { set_idt_setup() };
 
-    with_page_allocator(|alloc| {
-        println!("Total Memory: {} KiB", alloc.total_pages() * 4096 / 1024);
-        println!(
-            "Allocated Memory: {} KiB",
-            alloc.allocated_pages() * 4096 / 1024
-        );
-        println!("Free Memory: {} KiB", alloc.free_pages() * 4096 / 1024);
-    });
+    let mut v = vec![1, 2, 3];
+    if true {
+        v.push(4);
+    }
+    for (index, value) in v.iter().enumerate() {
+        println!("v[{index}] = {value}");
+    }
 
     hlt()
 }
