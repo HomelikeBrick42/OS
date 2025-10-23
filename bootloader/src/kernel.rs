@@ -1,6 +1,7 @@
 use crate::{
     framebuffer::framebuffer,
     gdt::setup_gdt,
+    idt::{disable_interrupts, enable_interrupts, setup_idt},
     page_allocator::with_page_allocator,
     print::{println, with_global_printer},
     utils::hlt,
@@ -23,13 +24,12 @@ pub extern "win64" fn kernel_main() -> ! {
         framebuffer.color(background_color),
     );
 
+    unsafe { disable_interrupts() };
     unsafe { setup_gdt() };
+    unsafe { setup_idt() };
+    unsafe { enable_interrupts() };
 
     with_page_allocator(|alloc| {
-        for block in alloc.blocks() {
-            println!("{block:x?}");
-        }
-
         println!("Total Memory: {} KiB", alloc.total_pages() * 4096 / 1024);
         println!(
             "Allocated Memory: {} KiB",

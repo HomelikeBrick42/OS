@@ -1,13 +1,14 @@
 use core::{arch::asm, mem::offset_of};
 
 #[repr(C, packed)]
-pub struct GdtDescriptor {
+struct GdtDescriptor {
     pub size: u16,
-    pub offset: usize,
+    pub offset: *const Gdt,
 }
 
 const _: () = assert!(size_of::<GdtDescriptor>() == 10);
 
+#[repr(C)]
 pub struct Entry {
     pub limit0: u16,
     pub base0: u16,
@@ -19,12 +20,14 @@ pub struct Entry {
 
 const _: () = assert!(size_of::<Entry>() == 8);
 
-#[repr(C, align(0x1000))]
-struct Gdt {
-    null: Entry,
-    kernel_code: Entry,
-    kernel_data: Entry,
+#[repr(C)]
+pub struct Gdt {
+    pub null: Entry,
+    pub kernel_code: Entry,
+    pub kernel_data: Entry,
 }
+
+const _: () = assert!(size_of::<Gdt>().is_multiple_of(size_of::<Entry>()));
 
 #[allow(clippy::unusual_byte_groupings)]
 static GDT: Gdt = Gdt {
@@ -41,7 +44,7 @@ static GDT: Gdt = Gdt {
         base0: 0x0000,
         base1: 0x00,
         access_byte: 0b1_00_1_1_0_1_1,
-        limit1_flags: 0xF0 | 0b1010,
+        limit1_flags: (0b1010 << 4) | 0x0F,
         base2: 0x00,
     },
     kernel_data: Entry {
@@ -49,7 +52,7 @@ static GDT: Gdt = Gdt {
         base0: 0x0000,
         base1: 0x00,
         access_byte: 0b1_00_1_0_0_1_1,
-        limit1_flags: 0xF0 | 0b1010,
+        limit1_flags: (0b1010 << 4) | 0x0F,
         base2: 0x00,
     },
 };
@@ -57,7 +60,7 @@ static GDT: Gdt = Gdt {
 pub unsafe fn setup_gdt() {
     let descriptor = GdtDescriptor {
         size: (size_of::<Gdt>() - 1) as _,
-        offset: (&raw const GDT).addr(),
+        offset: &raw const GDT,
     };
 
     // load the gdt into the gdtr resgister

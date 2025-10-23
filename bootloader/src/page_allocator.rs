@@ -1,5 +1,3 @@
-use spin::Mutex;
-
 use crate::{efi, hlt, print::println};
 use core::num::NonZeroUsize;
 
@@ -130,7 +128,7 @@ impl PageAllocator {
     }
 }
 
-static PAGE_ALLOCATOR: Mutex<PageAllocator> = Mutex::new(PageAllocator {
+static PAGE_ALLOCATOR: spin::Mutex<PageAllocator> = spin::Mutex::new(PageAllocator {
     blocks: &[],
     bitmap: &mut [],
 });

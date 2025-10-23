@@ -1,21 +1,21 @@
 #![no_std]
 #![no_main]
-#![feature(sync_unsafe_cell, format_args_nl)]
+#![feature(sync_unsafe_cell, format_args_nl, abi_x86_interrupt)]
 
 use crate::{
     framebuffer::{Color, framebuffer, init_framebuffer},
+    idt::disable_interrupts,
     kernel::kernel_main,
     page_allocator::{init_page_allocator, with_page_allocator},
-    text_writer::TextWriter,
-    utils::{disable_interrupts, hlt},
+    utils::{error_screen, hlt},
 };
 use core::{arch::asm, fmt::Write};
 use core::{num::NonZeroUsize, panic::PanicInfo};
-use font::SPACE_MONO;
 
 pub mod efi;
 pub mod framebuffer;
 pub mod gdt;
+pub mod idt;
 pub mod kernel;
 pub mod page_allocator;
 pub mod print;
@@ -106,35 +106,12 @@ unsafe extern "efiapi" fn efi_main(
 
 #[panic_handler]
 fn panic(info: &PanicInfo<'_>) -> ! {
-    let framebuffer = framebuffer();
-
-    let background = Color { r: 255, g: 0, b: 0 };
-    framebuffer.fill(
-        0,
-        0,
-        framebuffer.width(),
-        framebuffer.height(),
-        framebuffer.color(background),
-    );
-
-    let mut text_writer = TextWriter {
-        x: &mut 0,
-        y: &mut 0,
-        left_margin: 0,
-        text_color: Color {
-            r: 255,
-            g: 255,
-            b: 255,
-        },
-        background,
-        font: &SPACE_MONO,
-        framebuffer,
-    };
-
-    if let Some(location) = info.location() {
-        _ = write!(text_writer, "{}: ", location);
-    }
-    _ = writeln!(text_writer, "{}", info.message());
+    error_screen(|text_writer| {
+        if let Some(location) = info.location() {
+            _ = write!(text_writer, "{}: ", location);
+        }
+        _ = writeln!(text_writer, "{}", info.message());
+    });
 
     hlt()
 }
