@@ -93,7 +93,7 @@ unsafe extern "efiapi" fn efi_main(
         });
 
         let stack_start = stack + stack_size;
-        let _: extern "win64" fn() -> ! = kernel_main;
+        let _: unsafe extern "win64" fn() -> ! = kernel_main;
         asm!(
             "mov rsp, {stack_start}",
             "call {kernel_main}",

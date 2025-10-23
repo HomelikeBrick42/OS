@@ -27,7 +27,6 @@ struct Entry {
 
 const _: () = assert!(size_of::<Entry>() == 16);
 
-#[expect(unused)]
 enum InterruptType {
     Interrupt,
     Trap,
@@ -48,6 +47,14 @@ impl Entry {
             InterruptType::Interrupt => 0b1000_1110,
             InterruptType::Trap => 0b1000_1111,
         };
+    }
+
+    pub fn set_handler(
+        &mut self,
+        handler: extern "x86-interrupt" fn(InterruptStackFrame),
+        interrupt_type: InterruptType,
+    ) {
+        self.set_handler_(handler as usize, interrupt_type);
     }
 
     pub fn set_handler_with_error(
@@ -90,6 +97,8 @@ pub unsafe fn setup_idt() {
     {
         let idt = unsafe { &mut *IDT.get() };
 
+        idt.entries[0x03].set_handler(debug_break_handler, InterruptType::Trap);
+
         idt.entries[0x08].set_abort_handler_with_error(double_fault_handler);
         idt.entries[0x0D].set_handler_with_error(general_protection_handler);
         idt.entries[0x0E].set_handler_with_error(page_fault_handler);
@@ -120,6 +129,15 @@ struct InterruptStackFrame {
     pub flags: usize,
     pub sp: usize,
     pub ss: usize,
+}
+
+extern "x86-interrupt" fn debug_break_handler(stack_frame: InterruptStackFrame) {
+    error_screen(|text_writer| {
+        writeln!(text_writer, "Debug Break:").unwrap();
+        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
+    });
+
+    hlt()
 }
 
 extern "x86-interrupt" fn double_fault_handler(

@@ -7,7 +7,7 @@ use crate::{
     utils::hlt,
 };
 
-pub extern "win64" fn kernel_main() -> ! {
+pub unsafe extern "win64" fn kernel_main() -> ! {
     let framebuffer = framebuffer();
 
     let background_color = with_global_printer(|printer| {
