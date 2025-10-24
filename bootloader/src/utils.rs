@@ -11,12 +11,12 @@ pub fn hlt() -> ! {
     }
 }
 
-pub unsafe fn inb(port: u16) -> u8 {
+pub unsafe fn inb<const PORT: u16>() -> u8 {
     let value;
     unsafe {
         asm!(
-            "in al, dx",
-            in("dx") port,
+            "in al, {port}",
+            port = const PORT,
             out("al") value,
             options(nomem, nostack)
         );
@@ -24,11 +24,11 @@ pub unsafe fn inb(port: u16) -> u8 {
     value
 }
 
-pub unsafe fn outb(port: u16, value: u8) {
+pub unsafe fn outb<const PORT: u16>(value: u8) {
     unsafe {
         asm!(
-            "out dx, al",
-            in("dx") port,
+            "out {port}, al",
+            port = const PORT,
             in("al") value,
             options(nomem, nostack)
         );
@@ -36,13 +36,7 @@ pub unsafe fn outb(port: u16, value: u8) {
 }
 
 pub fn io_wait() {
-    unsafe {
-        asm!(
-            "out 0x80, al",
-            in("al") 0u8,
-            options(nomem, nostack)
-        );
-    }
+    unsafe { outb::<0x80>(0) };
 }
 
 pub fn get_flags() -> u64 {

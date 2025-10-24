@@ -40,9 +40,9 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
             entry.set_handler(keyboard_handler, InterruptType::Interrupt);
         });
     }
-    unsafe { outb(PIC1_DATA, 0b11111101) };
+    unsafe { outb::<PIC1_DATA>(0b11111101) };
     io_wait();
-    unsafe { outb(PIC2_DATA, 0b11111111) };
+    unsafe { outb::<PIC2_DATA>(0b11111111) };
     io_wait();
 
     unsafe { enable_interrupts() };
@@ -59,7 +59,7 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
 }
 
 unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
-    let scancode = unsafe { inb(0x60) };
+    let scancode = unsafe { inb::<0x60>() };
     io_wait();
 
     println!("Scancode: {}", scancode);
