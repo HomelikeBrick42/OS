@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+arrayvec = { version = "0.7.6", default-features = false }
 font = { workspace = true }
 spin = "0.10.0"
 utf16_literal = "0.2.1"

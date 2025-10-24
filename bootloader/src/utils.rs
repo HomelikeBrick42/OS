@@ -5,10 +5,8 @@ use crate::{
 use core::arch::asm;
 use font::SPACE_MONO;
 
-pub fn hlt() -> ! {
-    loop {
-        unsafe { asm!("hlt") };
-    }
+pub fn hlt() {
+    unsafe { asm!("hlt", options(nomem, nostack)) };
 }
 
 pub unsafe fn inb<const PORT: u16>() -> u8 {

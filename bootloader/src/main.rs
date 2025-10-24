@@ -117,5 +117,7 @@ fn panic(info: &PanicInfo<'_>) -> ! {
         _ = writeln!(text_writer, "{}", info.message());
     });
 
-    hlt()
+    loop {
+        hlt();
+    }
 }

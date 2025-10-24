@@ -171,7 +171,9 @@ unsafe extern "x86-interrupt" fn double_fault_handler(
         writeln!(text_writer, "{error_code:#x}").unwrap();
     });
 
-    hlt()
+    loop {
+        hlt();
+    }
 }
 
 unsafe extern "x86-interrupt" fn general_protection_handler(
@@ -184,7 +186,9 @@ unsafe extern "x86-interrupt" fn general_protection_handler(
         writeln!(text_writer, "{error_code:#x}").unwrap();
     });
 
-    hlt()
+    loop {
+        hlt();
+    }
 }
 
 unsafe extern "x86-interrupt" fn page_fault_handler(
@@ -197,5 +201,7 @@ unsafe extern "x86-interrupt" fn page_fault_handler(
         writeln!(text_writer, "{error_code:#x}").unwrap();
     });
 
-    hlt()
+    loop {
+        hlt();
+    }
 }

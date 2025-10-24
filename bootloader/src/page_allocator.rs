@@ -128,12 +128,11 @@ impl PageAllocator {
     }
 }
 
-static PAGE_ALLOCATOR: spin::Mutex<PageAllocator> = spin::Mutex::new(PageAllocator {
-    blocks: &[],
-    bitmap: &mut [],
-});
-
 pub fn with_page_allocator<R>(f: impl FnOnce(&mut PageAllocator) -> R) -> R {
+    static PAGE_ALLOCATOR: spin::Mutex<PageAllocator> = spin::Mutex::new(PageAllocator {
+        blocks: &[],
+        bitmap: &mut [],
+    });
     with_disabled_interrupts(|| f(&mut PAGE_ALLOCATOR.lock()))
 }
 
@@ -236,7 +235,9 @@ pub unsafe fn init_page_allocator(
     }
     if size_so_far < required_allocator_size {
         println!("Cannot find enough memory to store page allocator state");
-        hlt()
+        loop {
+            hlt();
+        }
     }
 
     unsafe { core::ptr::write_bytes(ptr, 0, required_allocator_size) };
@@ -300,5 +301,5 @@ pub unsafe fn init_page_allocator(
     // make sure to not allocate the null page, just for now
     unsafe { page_allocator.set_allocated(0, true) };
 
-    *PAGE_ALLOCATOR.lock() = page_allocator;
+    with_page_allocator(|alloc| *alloc = page_allocator);
 }

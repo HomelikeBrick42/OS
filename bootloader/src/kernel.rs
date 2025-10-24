@@ -1,15 +1,14 @@
 use crate::{
-    drivers::pic::{PIC1_DATA, PIC2_DATA, pic1_end, remap_pic},
+    drivers::{
+        pic::{PIC1_DATA, PIC2_DATA, remap_pic},
+        ps2_keyboard::{keyboard_handler, with_keyboard_state},
+    },
     framebuffer::framebuffer,
     gdt::setup_gdt,
-    idt::{
-        InterruptStackFrame, InterruptType, disable_interrupts, enable_interrupts, setup_idt,
-        with_idt_entry,
-    },
+    idt::{InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_idt_entry},
     print::{println, with_global_printer},
-    utils::{hlt, inb, io_wait, outb},
+    utils::{hlt, io_wait, outb},
 };
-use alloc::vec;
 
 pub unsafe extern "win64" fn kernel_main() -> ! {
     unsafe { disable_interrupts() };
@@ -47,22 +46,12 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
 
     unsafe { enable_interrupts() };
 
-    let mut v = vec![1, 2, 3];
-    if true {
-        v.push(4);
+    loop {
+        with_keyboard_state(|keyboard| {
+            while let Some(event) = keyboard.next_event() {
+                println!("{event:?}");
+            }
+        });
+        hlt();
     }
-    for (index, value) in v.iter().enumerate() {
-        println!("v[{index}] = {value}");
-    }
-
-    hlt()
-}
-
-unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
-    let scancode = unsafe { inb::<0x60>() };
-    io_wait();
-
-    println!("Scancode: {}", scancode);
-
-    unsafe { pic1_end() };
 }
