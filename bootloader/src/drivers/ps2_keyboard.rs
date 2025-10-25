@@ -134,7 +134,9 @@ pub enum Key {
     Email,
     MediaSelect,
 
-    Unknown(ArrayVec<u8, 8>),
+    Unknown1([u8; 1]),
+    Unknown2([u8; 2]),
+    Unknown3([u8; 3]),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -151,7 +153,7 @@ pub struct KeyEvent {
 
 pub struct KeyboardState {
     key_events: VecDeque<KeyEvent>,
-    bytes: ArrayVec<u8, 8>,
+    bytes: ArrayVec<u8, 4>,
 }
 
 impl KeyboardState {
@@ -226,7 +228,7 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
                     0x6C => Key::Email,
                     0x6D => Key::MediaSelect,
 
-                    _ => Key::Unknown(bytes),
+                    _ => Key::Unknown2(bytes.as_slice().try_into().unwrap()),
                 };
                 keyboard.key_events.push_back(KeyEvent { key, state });
             }
@@ -242,7 +244,7 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
                     KeyState::Released
                 };
                 keyboard.key_events.push_back(KeyEvent {
-                    key: Key::Unknown(bytes),
+                    key: Key::Unknown3(bytes.as_slice().try_into().unwrap()),
                     state,
                 });
             }
@@ -343,7 +345,7 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
                 0x57 => Key::F11,
                 0x58 => Key::F12,
 
-                _ => Key::Unknown(bytes),
+                _ => Key::Unknown1(bytes.as_slice().try_into().unwrap()),
             };
             keyboard.key_events.push_back(KeyEvent { key, state });
         }
