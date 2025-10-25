@@ -1,7 +1,6 @@
 use crate::{
-    framebuffer::Color,
+    framebuffer::{Color, framebuffer},
     idt::with_disabled_interrupts,
-    screen::{NoopScreen, Screen},
     text_writer::TextWriter,
 };
 use core::fmt::Write;
@@ -40,7 +39,6 @@ pub struct GlobalPrinter {
     pub text_color: Color,
     pub background_color: Color,
     pub font: &'static Font<'static>,
-    pub screen: &'static mut dyn Screen,
 }
 
 impl Write for GlobalPrinter {
@@ -52,7 +50,7 @@ impl Write for GlobalPrinter {
             text_color: self.text_color,
             background: self.background_color,
             font: self.font,
-            screen: &mut *self.screen,
+            framebuffer: framebuffer(),
         }
         .write_str(s)
     }
@@ -65,7 +63,7 @@ impl Write for GlobalPrinter {
             text_color: self.text_color,
             background: self.background_color,
             font: self.font,
-            screen: &mut *self.screen,
+            framebuffer: framebuffer(),
         }
         .write_char(c)
     }
@@ -78,7 +76,7 @@ impl Write for GlobalPrinter {
             text_color: self.text_color,
             background: self.background_color,
             font: self.font,
-            screen: &mut *self.screen,
+            framebuffer: framebuffer(),
         }
         .write_fmt(args)
     }
@@ -100,7 +98,6 @@ pub fn with_global_printer<R>(f: impl FnOnce(&mut GlobalPrinter) -> R) -> R {
             b: 50,
         },
         font: &SPACE_MONO,
-        screen: NoopScreen::get_static(),
     });
 
     with_disabled_interrupts(|| f(&mut GLOBAL_PRINTER.lock()))

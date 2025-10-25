@@ -1,4 +1,4 @@
-use crate::{efi, screen::Screen};
+use crate::efi;
 use core::{arch::asm, cell::SyncUnsafeCell};
 use utf16_literal::utf16;
 
@@ -39,7 +39,13 @@ impl Color {
     }
 }
 
+enum FrameBufferFormat {
+    Rgb,
+    Bgr,
+}
+
 pub struct Framebuffer {
+    format: FrameBufferFormat,
     pixels_base: *mut FramebufferColor,
     pixels_width: usize,
     pixels_height: usize,
@@ -50,36 +56,59 @@ unsafe impl Send for Framebuffer {}
 unsafe impl Sync for Framebuffer {}
 
 impl Framebuffer {
+    pub fn color(&self, color: Color) -> FramebufferColor {
+        FramebufferColor(u32::from_ne_bytes(match self.format {
+            FrameBufferFormat::Rgb => [color.r, color.g, color.b, 0x00],
+            FrameBufferFormat::Bgr => [color.b, color.g, color.r, 0x00],
+        }))
+    }
+
     pub fn base(&self) -> usize {
-        self.pixels_base as _
+        self.pixels_base.addr()
     }
 
     pub fn size(&self) -> usize {
         self.pixels_height * self.pixels_per_scanline
     }
-}
 
-impl Screen for Framebuffer {
-    fn width(&self) -> usize {
+    pub fn width(&self) -> usize {
         self.pixels_width
     }
 
-    fn height(&self) -> usize {
+    pub fn height(&self) -> usize {
         self.pixels_height
     }
 
-    unsafe fn get_pixel_unchecked(&self, x: usize, y: usize) -> FramebufferColor {
+    /// # Safety
+    /// `x` and `y` must be in-bounds
+    pub unsafe fn set_pixel_unchecked(&self, x: usize, y: usize, color: FramebufferColor) {
         let pixel = unsafe { self.pixels_base.add(x + y * self.pixels_per_scanline) };
-        unsafe { pixel.read() }
+        unsafe { pixel.write_volatile(color) };
     }
 
-    unsafe fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: FramebufferColor) {
-        let pixel = unsafe { self.pixels_base.add(x + y * self.pixels_per_scanline) };
-        unsafe { pixel.write(color) }
+    pub fn set_pixel(&self, x: usize, y: usize, color: FramebufferColor) {
+        if x < self.pixels_width && y < self.pixels_height {
+            unsafe { self.set_pixel_unchecked(x, y, color) };
+        }
     }
 
-    fn present(&mut self) {
-        unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
+    pub fn fill(
+        &self,
+        left: usize,
+        top: usize,
+        width: usize,
+        height: usize,
+        color: FramebufferColor,
+    ) {
+        let top = top.min(self.pixels_height);
+        let bottom = top.saturating_add(height).min(self.pixels_height);
+        let left = left.min(self.pixels_width);
+        let right = left.saturating_add(width).min(self.pixels_width);
+        for y in top..bottom {
+            for x in left..right {
+                unsafe { self.set_pixel_unchecked(x, y, color) };
+            }
+        }
     }
 }
 
@@ -87,27 +116,19 @@ impl Screen for Framebuffer {
 #[repr(transparent)]
 pub struct FramebufferColor(u32);
 
-#[derive(Clone, Copy)]
-enum FrameBufferFormat {
-    Rgb,
-    Bgr,
+static FRAMEBUFFER: SyncUnsafeCell<Framebuffer> = SyncUnsafeCell::new(Framebuffer {
+    format: FrameBufferFormat::Rgb,
+    pixels_base: core::ptr::null_mut(),
+    pixels_width: 0,
+    pixels_height: 0,
+    pixels_per_scanline: 0,
+});
+
+pub fn framebuffer() -> &'static Framebuffer {
+    unsafe { &*FRAMEBUFFER.get() }
 }
 
-static FRAMEBUFFER_FORMAT: SyncUnsafeCell<FrameBufferFormat> =
-    SyncUnsafeCell::new(FrameBufferFormat::Rgb);
-
-impl FramebufferColor {
-    pub fn new(color: Color) -> Self {
-        FramebufferColor(u32::from_ne_bytes(
-            match unsafe { *FRAMEBUFFER_FORMAT.get() } {
-                FrameBufferFormat::Rgb => [color.r, color.g, color.b, 0x00],
-                FrameBufferFormat::Bgr => [color.b, color.g, color.r, 0x00],
-            },
-        ))
-    }
-}
-
-pub unsafe fn init_framebuffer(system_table: efi::SystemTable) -> Result<Framebuffer, efi::Error> {
+pub unsafe fn init_framebuffer(system_table: efi::SystemTable) -> efi::Status {
     let gop = unsafe { system_table.locate_gop()? };
     let (_, info) =
         unsafe { gop.query_mode(gop.mode().map(|mode| (*mode.as_ptr()).mode).unwrap_or(0))? };
@@ -136,12 +157,14 @@ pub unsafe fn init_framebuffer(system_table: efi::SystemTable) -> Result<Framebu
     unsafe { gop.set_mode(gop.mode().map(|mode| (*mode.as_ptr()).mode).unwrap_or(0))? };
     let mode = unsafe { gop.mode().unwrap_unchecked().read() };
 
-    unsafe { *FRAMEBUFFER_FORMAT.get() = format };
-
-    Ok(Framebuffer {
-        pixels_base: mode.frame_buffer_base.cast(),
-        pixels_width: info.horizontal_resolution as _,
-        pixels_height: info.vertical_resolution as _,
-        pixels_per_scanline: info.pixels_per_scan_line as _,
-    })
+    unsafe {
+        *FRAMEBUFFER.get() = Framebuffer {
+            format,
+            pixels_base: mode.frame_buffer_base.cast(),
+            pixels_width: info.horizontal_resolution as _,
+            pixels_height: info.vertical_resolution as _,
+            pixels_per_scanline: info.pixels_per_scan_line as _,
+        };
+    }
+    Ok(())
 }

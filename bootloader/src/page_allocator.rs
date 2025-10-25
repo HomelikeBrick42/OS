@@ -1,4 +1,4 @@
-use crate::{efi, idt::with_disabled_interrupts, print::println, utils::hlt};
+use crate::{efi, hlt, idt::with_disabled_interrupts, print::println};
 use core::num::NonZeroUsize;
 
 #[derive(Debug)]

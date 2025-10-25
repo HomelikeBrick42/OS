@@ -3,15 +3,13 @@
 #![feature(sync_unsafe_cell, format_args_nl, abi_x86_interrupt)]
 
 use crate::{
-    framebuffer::{Color, Framebuffer, FramebufferColor, init_framebuffer},
+    framebuffer::{Color, framebuffer, init_framebuffer},
     idt::disable_interrupts,
     kernel::kernel_main,
     page_allocator::{init_page_allocator, with_page_allocator},
-    print::{println, with_global_printer},
-    screen::Screen,
-    utils::hlt,
+    utils::{error_screen, hlt},
 };
-use core::{arch::asm, cell::SyncUnsafeCell};
+use core::{arch::asm, fmt::Write};
 use core::{num::NonZeroUsize, panic::PanicInfo};
 
 pub mod drivers;
@@ -23,7 +21,6 @@ pub mod kernel;
 pub mod page_allocator;
 pub mod print;
 pub mod rust_global_allocators;
-pub mod screen;
 pub mod text_writer;
 pub mod utils;
 
@@ -34,23 +31,18 @@ unsafe extern "efiapi" fn efi_main(
     image_handle: efi::Handle,
     system_table: efi::SystemTable,
 ) -> efi::Status {
-    let mut framebuffer = unsafe { init_framebuffer(system_table)? };
+    unsafe { init_framebuffer(system_table)? };
 
+    let framebuffer = framebuffer();
     let width = framebuffer.width();
     let height = framebuffer.height();
 
     let background = Color {
-        r: 50,
-        g: 50,
-        b: 50,
+        r: 20,
+        g: 20,
+        b: 20,
     };
-    framebuffer.fill(0, 0, width, height, FramebufferColor::new(background));
-
-    with_global_printer(|printer| {
-        static FRAMEBUFFER: SyncUnsafeCell<Option<Framebuffer>> = SyncUnsafeCell::new(None);
-        let framebuffer = unsafe { (*FRAMEBUFFER.get()).insert(framebuffer) };
-        printer.screen = framebuffer;
-    });
+    framebuffer.fill(0, 0, width, height, framebuffer.color(background));
 
     // get memory map
     let mut memory_map_size = 0;
@@ -118,10 +110,12 @@ unsafe extern "efiapi" fn efi_main(
 
 #[panic_handler]
 fn panic(info: &PanicInfo<'_>) -> ! {
-    if let Some(location) = info.location() {
-        println!("{}: ", location);
-    }
-    println!("{}", info.message());
+    error_screen(|text_writer| {
+        if let Some(location) = info.location() {
+            _ = write!(text_writer, "{}: ", location);
+        }
+        _ = writeln!(text_writer, "{}", info.message());
+    });
 
     loop {
         hlt();
