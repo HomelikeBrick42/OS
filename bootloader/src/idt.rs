@@ -1,8 +1,9 @@
 use crate::{
     gdt::Gdt,
-    utils::{error_screen, get_flags, hlt},
+    print::println,
+    utils::{get_flags, hlt},
 };
-use core::{arch::asm, cell::SyncUnsafeCell, fmt::Write, mem::offset_of};
+use core::{arch::asm, cell::SyncUnsafeCell, mem::offset_of};
 
 #[derive(Debug)]
 #[repr(C, packed)]
@@ -153,23 +154,21 @@ pub struct InterruptStackFrame {
 }
 
 unsafe extern "x86-interrupt" fn debug_break_handler(stack_frame: InterruptStackFrame) {
-    error_screen(|text_writer| {
-        writeln!(text_writer, "Debug Break:").unwrap();
-        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
-    });
+    println!("Debug Break:");
+    println!("{stack_frame:#x?}");
 
-    hlt()
+    loop {
+        hlt();
+    }
 }
 
 unsafe extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) -> ! {
-    error_screen(|text_writer| {
-        writeln!(text_writer, "Double Fault:").unwrap();
-        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
-        writeln!(text_writer, "{error_code:#x}").unwrap();
-    });
+    println!("Double Fault:");
+    println!("{stack_frame:#x?}");
+    println!("{error_code:#x}");
 
     loop {
         hlt();
@@ -180,11 +179,9 @@ unsafe extern "x86-interrupt" fn general_protection_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
-    error_screen(|text_writer| {
-        writeln!(text_writer, "General Protection Fault:").unwrap();
-        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
-        writeln!(text_writer, "{error_code:#x}").unwrap();
-    });
+    println!("General Protection Fault:");
+    println!("{stack_frame:#x?}");
+    println!("{error_code:#x}");
 
     loop {
         hlt();
@@ -195,11 +192,9 @@ unsafe extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
-    error_screen(|text_writer| {
-        writeln!(text_writer, "Page Fault:").unwrap();
-        writeln!(text_writer, "{stack_frame:#x?}").unwrap();
-        writeln!(text_writer, "{error_code:#x}").unwrap();
-    });
+    println!("Page Fault:");
+    println!("{stack_frame:#x?}");
+    println!("{error_code:#x}");
 
     loop {
         hlt();

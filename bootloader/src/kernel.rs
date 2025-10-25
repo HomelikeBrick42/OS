@@ -1,34 +1,82 @@
 use crate::{
     drivers::{
         pic::{PIC1_DATA, PIC2_DATA, remap_pic},
-        ps2_keyboard::{Key, keyboard_handler, setup_keyboard, with_keyboard_state},
+        ps2_keyboard::{keyboard_handler, setup_keyboard, with_keyboard_state},
         ps2_mouse::{mouse_handler, setup_mouse, with_mouse_state},
     },
-    framebuffer::framebuffer,
+    framebuffer::{Color, FramebufferColor},
     gdt::setup_gdt,
     idt::{InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_idt_entry},
-    print::{println, with_global_printer},
+    print::with_global_printer,
+    screen::{NoopScreen, Screen},
     utils::{hlt, io_wait, outb},
 };
+use alloc::{vec, vec::Vec};
+use core::cell::SyncUnsafeCell;
+
+struct BufferedScreen {
+    width: usize,
+    height: usize,
+    screen: &'static mut dyn Screen,
+    buffer: Vec<FramebufferColor>,
+}
+
+impl Screen for BufferedScreen {
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+
+    unsafe fn get_pixel_unchecked(&self, x: usize, y: usize) -> FramebufferColor {
+        unsafe { *self.buffer.get_unchecked(x + y * self.width) }
+    }
+
+    unsafe fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: FramebufferColor) {
+        unsafe { *self.buffer.get_unchecked_mut(x + y * self.width) = color }
+    }
+
+    fn present(&mut self) {
+        let screen = core::mem::replace(&mut self.screen, NoopScreen::get_static());
+        screen.copy(self);
+        screen.present();
+        self.screen = screen;
+    }
+}
 
 pub unsafe extern "win64" fn kernel_main() -> ! {
     unsafe { disable_interrupts() };
 
-    let framebuffer = framebuffer();
+    with_global_printer(|printer| {
+        let screen = core::mem::replace(&mut printer.screen, NoopScreen::get_static());
+        let buffer = vec![
+            FramebufferColor::new(Color {
+                r: 50,
+                g: 50,
+                b: 50,
+            });
+            screen.width() * screen.height()
+        ];
 
-    let background_color = with_global_printer(|printer| {
-        printer.x = 0;
-        printer.y = 0;
-        printer.left_margin = 0;
-        printer.background_color
+        static BUFFERED_SCREEN: SyncUnsafeCell<BufferedScreen> =
+            SyncUnsafeCell::new(BufferedScreen {
+                width: 0,
+                height: 0,
+                screen: NoopScreen::get_static(),
+                buffer: vec![],
+            });
+        unsafe {
+            *BUFFERED_SCREEN.get() = BufferedScreen {
+                width: screen.width(),
+                height: screen.height(),
+                screen,
+                buffer,
+            }
+        };
+        printer.screen = unsafe { &mut *BUFFERED_SCREEN.get() };
     });
-    framebuffer.fill(
-        0,
-        0,
-        framebuffer.width(),
-        framebuffer.height(),
-        framebuffer.color(background_color),
-    );
 
     unsafe { setup_gdt() };
     unsafe { setup_idt() };
@@ -56,41 +104,59 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
 
     unsafe { enable_interrupts() };
 
+    let mut mouse_x = 0usize;
+    let mut mouse_y = 0usize;
     loop {
+        clear_screen();
+
         with_keyboard_state(|keyboard| {
             while let Some(event) = keyboard.next_event() {
-                println!("{event:?}");
-                if matches!(event.key, Key::Backspace) {
-                    clear_screen();
-                }
+                _ = event;
             }
         });
 
         with_mouse_state(|mouse| {
             while let Some(event) = mouse.next_event() {
-                clear_screen();
-                println!("{event:#?}");
+                mouse_x = mouse_x.saturating_add_signed(event.x_offset as isize);
+                mouse_y = mouse_y.saturating_add_signed(-(event.y_offset as isize));
             }
         });
 
+        with_global_printer(|printer| {
+            mouse_x = mouse_x.min(printer.screen.width());
+            mouse_y = mouse_y.min(printer.screen.height());
+
+            printer.screen.fill(
+                mouse_x.saturating_sub(5),
+                mouse_y.saturating_sub(5),
+                10,
+                10,
+                FramebufferColor::new(Color {
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                }),
+            );
+
+            printer.screen.present();
+        });
         hlt();
     }
 }
 
 fn clear_screen() {
-    let background_color = with_global_printer(|printer| {
-        printer.x = 0;
+    with_global_printer(|printer| {
+        printer.x = printer.left_margin;
         printer.y = 0;
-        printer.left_margin = 0;
-        printer.background_color
-    });
 
-    let framebuffer = framebuffer();
-    framebuffer.fill(
-        0,
-        0,
-        framebuffer.width(),
-        framebuffer.height(),
-        framebuffer.color(background_color),
-    );
+        let width = printer.screen.width();
+        let height = printer.screen.height();
+        printer.screen.fill(
+            0,
+            0,
+            width,
+            height,
+            FramebufferColor::new(printer.background_color),
+        );
+    });
 }
