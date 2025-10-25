@@ -177,6 +177,8 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
 
         if keyboard.bytes[0] == 0xE0 {
             if keyboard.bytes.len() >= 2 {
+                assert_eq!(keyboard.bytes.len(), 2);
+
                 let bytes = core::mem::take(&mut keyboard.bytes);
 
                 let state = if bytes[1] & 0b1000_0000 == 0 {
@@ -230,6 +232,8 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
             }
         } else if keyboard.bytes[0] == 0xE1 {
             if keyboard.bytes.len() >= 3 {
+                assert_eq!(keyboard.bytes.len(), 3);
+
                 let bytes = core::mem::take(&mut keyboard.bytes);
 
                 let state = if bytes[1] & 0b1000_0000 == 0 {
@@ -243,6 +247,8 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
                 });
             }
         } else {
+            assert_eq!(keyboard.bytes.len(), 1);
+
             let bytes = core::mem::take(&mut keyboard.bytes);
 
             let state = if bytes[0] & 0b1000_0000 == 0 {
