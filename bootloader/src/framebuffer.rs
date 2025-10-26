@@ -79,16 +79,15 @@ impl Framebuffer {
         self.pixels_height
     }
 
-    /// # Safety
-    /// `x` and `y` must be in-bounds
-    pub unsafe fn set_pixel_unchecked(&self, x: usize, y: usize, color: FramebufferColor) {
+    unsafe fn set_pixel_unchecked(&self, x: usize, y: usize, color: FramebufferColor) {
         let pixel = unsafe { self.pixels_base.add(x + y * self.pixels_per_scanline) };
-        unsafe { pixel.write_volatile(color) };
+        unsafe { pixel.write(color) };
     }
 
     pub fn set_pixel(&self, x: usize, y: usize, color: FramebufferColor) {
         if x < self.pixels_width && y < self.pixels_height {
             unsafe { self.set_pixel_unchecked(x, y, color) };
+            unsafe { asm!("/* {0} */", in(reg) self.pixels_base) };
         }
     }
 
@@ -109,6 +108,7 @@ impl Framebuffer {
                 unsafe { self.set_pixel_unchecked(x, y, color) };
             }
         }
+        unsafe { asm!("/* {0} */", in(reg) self.pixels_base) };
     }
 }
 
