@@ -87,7 +87,7 @@ impl Framebuffer {
     pub fn set_pixel(&self, x: usize, y: usize, color: FramebufferColor) {
         if x < self.pixels_width && y < self.pixels_height {
             unsafe { self.set_pixel_unchecked(x, y, color) };
-            unsafe { asm!("/* {0} */", in(reg) self.pixels_base) };
+            unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
         }
     }
 
@@ -108,7 +108,7 @@ impl Framebuffer {
                 unsafe { self.set_pixel_unchecked(x, y, color) };
             }
         }
-        unsafe { asm!("/* {0} */", in(reg) self.pixels_base) };
+        unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
     }
 }
 
