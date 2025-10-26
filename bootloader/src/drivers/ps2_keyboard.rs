@@ -346,7 +346,7 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
                     } else if first == 0xE1 {
                         KeyboardDataState::Second([first, second])
                     } else {
-                        unreachable!()
+                        unreachable!("the first byte should be 0xE0 or 0xE1, but was {first:#X}")
                     }
                 }
 
