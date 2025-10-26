@@ -1,4 +1,4 @@
-use crate::{efi, hlt, idt::with_disabled_interrupts, print::println};
+use crate::{efi, hlt, interrupt_safe_mutex::InterruptSafeMutex, print::println};
 use core::num::NonZeroUsize;
 
 #[derive(Debug)]
@@ -128,13 +128,11 @@ impl PageAllocator {
     }
 }
 
-pub fn with_page_allocator<R>(f: impl FnOnce(&mut PageAllocator) -> R) -> R {
-    static PAGE_ALLOCATOR: spin::Mutex<PageAllocator> = spin::Mutex::new(PageAllocator {
+pub static PAGE_ALLOCATOR: InterruptSafeMutex<PageAllocator> =
+    InterruptSafeMutex::new(PageAllocator {
         blocks: &[],
         bitmap: &mut [],
     });
-    with_disabled_interrupts(|| f(&mut PAGE_ALLOCATOR.lock()))
-}
 
 pub unsafe fn init_page_allocator(
     memory_map: *mut efi::MemoryDescriptor,
@@ -301,5 +299,5 @@ pub unsafe fn init_page_allocator(
     // make sure to not allocate the null page, just for now
     unsafe { page_allocator.set_allocated(0, true) };
 
-    with_page_allocator(|alloc| *alloc = page_allocator);
+    PAGE_ALLOCATOR.with(|alloc| *alloc = page_allocator);
 }

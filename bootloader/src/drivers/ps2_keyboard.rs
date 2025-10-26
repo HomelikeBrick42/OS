@@ -1,6 +1,7 @@
 use crate::{
     drivers::pic::pic1_end,
-    idt::{InterruptStackFrame, with_disabled_interrupts},
+    idt::InterruptStackFrame,
+    interrupt_safe_mutex::InterruptSafeMutex,
     utils::{inb, io_wait},
 };
 use alloc::collections::vec_deque::VecDeque;
@@ -168,13 +169,11 @@ impl KeyboardState {
 
 pub unsafe fn setup_keyboard() {}
 
-pub fn with_keyboard_state<R>(f: impl FnOnce(&mut KeyboardState) -> R) -> R {
-    static KEYBOARD_STATE: spin::Mutex<KeyboardState> = spin::Mutex::new(KeyboardState {
+pub static KEYBOARD_STATE: InterruptSafeMutex<KeyboardState> =
+    InterruptSafeMutex::new(KeyboardState {
         key_events: VecDeque::new(),
         data_state: KeyboardDataState::None,
     });
-    with_disabled_interrupts(|| f(&mut KEYBOARD_STATE.lock()))
-}
 
 pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
     let scancode = unsafe { inb::<0x60>() };
@@ -183,7 +182,7 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
     if scancode == 0xFA {
         // just an ACK message
     } else {
-        with_keyboard_state(|keyboard| {
+        KEYBOARD_STATE.with(|keyboard| {
             keyboard.data_state = match keyboard.data_state {
                 KeyboardDataState::None => {
                     let first = scancode;

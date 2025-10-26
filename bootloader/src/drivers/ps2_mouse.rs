@@ -1,6 +1,7 @@
 use crate::{
     drivers::pic::pic2_end,
-    idt::{InterruptStackFrame, with_disabled_interrupts},
+    idt::InterruptStackFrame,
+    interrupt_safe_mutex::InterruptSafeMutex,
     utils::{inb, io_wait, outb},
 };
 use alloc::collections::vec_deque::VecDeque;
@@ -93,19 +94,16 @@ impl MouseState {
     }
 }
 
-pub fn with_mouse_state<R>(f: impl FnOnce(&mut MouseState) -> R) -> R {
-    static MOUSE_STATE: spin::Mutex<MouseState> = spin::Mutex::new(MouseState {
-        data_state: MouseDataState::None,
-        mouse_events: VecDeque::new(),
-    });
-    with_disabled_interrupts(|| f(&mut MOUSE_STATE.lock()))
-}
+pub static MOUSE_STATE: InterruptSafeMutex<MouseState> = InterruptSafeMutex::new(MouseState {
+    data_state: MouseDataState::None,
+    mouse_events: VecDeque::new(),
+});
 
 pub unsafe extern "x86-interrupt" fn mouse_handler(_: InterruptStackFrame) {
     let mouse_data = unsafe { inb::<0x60>() };
     io_wait();
 
-    with_mouse_state(|mouse| {
+    MOUSE_STATE.with(|mouse| {
         mouse.data_state = match mouse.data_state {
             MouseDataState::None => {
                 if mouse_data == 0xFA || mouse_data & 0b0000_1000 == 0 {

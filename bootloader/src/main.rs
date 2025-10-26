@@ -1,12 +1,17 @@
 #![no_std]
 #![no_main]
-#![feature(sync_unsafe_cell, format_args_nl, abi_x86_interrupt)]
+#![feature(
+    sync_unsafe_cell,
+    format_args_nl,
+    abi_x86_interrupt,
+    const_precise_live_drops
+)]
 
 use crate::{
     framebuffer::{Color, framebuffer, init_framebuffer},
     idt::disable_interrupts,
     kernel::kernel_main,
-    page_allocator::{init_page_allocator, with_page_allocator},
+    page_allocator::{PAGE_ALLOCATOR, init_page_allocator},
     utils::{error_screen, hlt},
 };
 use core::{arch::asm, fmt::Write};
@@ -17,6 +22,7 @@ pub mod efi;
 pub mod framebuffer;
 pub mod gdt;
 pub mod idt;
+pub mod interrupt_safe_mutex;
 pub mod kernel;
 pub mod page_allocator;
 pub mod print;
@@ -90,7 +96,7 @@ unsafe extern "efiapi" fn efi_main(
 
     unsafe {
         let stack_size = 4 * 1024 * 1024;
-        let stack = with_page_allocator(|alloc| {
+        let stack = PAGE_ALLOCATOR.with(|alloc| {
             alloc
                 .allocate(const { NonZeroUsize::new(16).unwrap() }, stack_size)
                 .expect("allocating the stack should succeed")

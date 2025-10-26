@@ -1,4 +1,4 @@
-use crate::page_allocator::with_page_allocator;
+use crate::page_allocator::PAGE_ALLOCATOR;
 use core::{alloc::GlobalAlloc, num::NonZeroUsize};
 
 #[derive(Debug, Clone, Copy)]
@@ -6,7 +6,7 @@ struct GlobalAllocator;
 
 unsafe impl GlobalAlloc for GlobalAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        with_page_allocator(|alloc| {
+        PAGE_ALLOCATOR.with(|alloc| {
             alloc
                 .allocate(
                     unsafe { NonZeroUsize::new_unchecked(layout.align()) },
@@ -17,7 +17,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
-        with_page_allocator(|alloc| unsafe { alloc.free(ptr as _, layout.size()) })
+        PAGE_ALLOCATOR.with(|alloc| unsafe { alloc.free(ptr as _, layout.size()) })
     }
 }
 

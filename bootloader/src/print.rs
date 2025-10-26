@@ -1,6 +1,6 @@
 use crate::{
     framebuffer::{Color, framebuffer},
-    idt::with_disabled_interrupts,
+    interrupt_safe_mutex::InterruptSafeMutex,
     text_writer::TextWriter,
 };
 use core::fmt::Write;
@@ -10,7 +10,7 @@ use font::{Font, SPACE_MONO};
 macro_rules! print {
     ($($tokens:tt)*) => {
         match ::core::format_args!($($tokens)*) {
-            fmt => $crate::print::with_global_printer(|printer| {
+            fmt => $crate::print::GLOBAL_PRINTER.with(|printer| {
                 ::core::fmt::Write::write_fmt(printer, fmt)
             }).unwrap(),
         }
@@ -23,7 +23,7 @@ pub(crate) use print;
 macro_rules! println {
     ($($tokens:tt)*) => {
         match ::core::format_args_nl!($($tokens)*) {
-            fmt => $crate::print::with_global_printer(|printer| {
+            fmt => $crate::print::GLOBAL_PRINTER.with(|printer| {
                 ::core::fmt::Write::write_fmt(printer, fmt)
             }).unwrap(),
         }
@@ -82,8 +82,8 @@ impl Write for GlobalPrinter {
     }
 }
 
-pub fn with_global_printer<R>(f: impl FnOnce(&mut GlobalPrinter) -> R) -> R {
-    static GLOBAL_PRINTER: spin::Mutex<GlobalPrinter> = spin::Mutex::new(GlobalPrinter {
+pub static GLOBAL_PRINTER: InterruptSafeMutex<GlobalPrinter> =
+    InterruptSafeMutex::new(GlobalPrinter {
         x: 0,
         y: 0,
         left_margin: 0,
@@ -99,6 +99,3 @@ pub fn with_global_printer<R>(f: impl FnOnce(&mut GlobalPrinter) -> R) -> R {
         },
         font: &SPACE_MONO,
     });
-
-    with_disabled_interrupts(|| f(&mut GLOBAL_PRINTER.lock()))
-}
