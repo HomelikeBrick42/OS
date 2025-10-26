@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-arrayvec = { version = "0.7.6", default-features = false }
 enum-map = "2.7.3"
 font = { workspace = true }
 spin = "0.10.0"
