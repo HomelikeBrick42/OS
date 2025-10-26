@@ -108,7 +108,7 @@ pub unsafe extern "x86-interrupt" fn mouse_handler(_: InterruptStackFrame) {
     with_mouse_state(|mouse| {
         mouse.data_state = match mouse.data_state {
             MouseDataState::None => {
-                if mouse_data == 0xFA {
+                if mouse_data == 0xFA || mouse_data & 0b0000_1000 == 0 {
                     MouseDataState::None
                 } else {
                     MouseDataState::First([mouse_data])
