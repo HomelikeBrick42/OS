@@ -353,6 +353,8 @@ pub unsafe extern "x86-interrupt" fn keyboard_handler(_: InterruptStackFrame) {
                 KeyboardDataState::Second([first, second]) => {
                     let third = scancode;
 
+                    assert_eq!(first, 0xE1);
+
                     let state = if second & 0b1000_0000 == 0 {
                         KeyState::Pressed
                     } else {
