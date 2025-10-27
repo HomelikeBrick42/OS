@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use crate::framebuffer::{Color, Framebuffer};
+use crate::framebuffer::{Color, Framebuffer, FramebufferColor};
 use font::Font;
 
 pub struct TextWriter<'a> {
@@ -31,9 +31,8 @@ impl Write for TextWriter<'_> {
                 for xoffset in 0..char.width as usize {
                     let brightness = page.brightnesses[(char.x as usize + xoffset)
                         + (char.y as usize + yoffset) * page.width as usize];
-                    let color = self
-                        .framebuffer
-                        .color(self.background.lerp(self.text_color, brightness));
+                    let color =
+                        FramebufferColor::new(self.background.lerp(self.text_color, brightness));
                     self.framebuffer.set_pixel(
                         *self.x + xoffset + char.xoffset as usize,
                         *self.y + yoffset + char.yoffset as usize,

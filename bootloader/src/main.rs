@@ -8,10 +8,10 @@
 )]
 
 use crate::{
-    framebuffer::{Color, framebuffer, init_framebuffer},
+    framebuffer::{framebuffer, init_framebuffer, Color, FramebufferColor},
     idt::disable_interrupts,
     kernel::kernel_main,
-    page_allocator::{PAGE_ALLOCATOR, init_page_allocator},
+    page_allocator::{init_page_allocator, PAGE_ALLOCATOR},
     utils::{error_screen, hlt},
 };
 use core::{arch::asm, fmt::Write};
@@ -48,7 +48,7 @@ unsafe extern "efiapi" fn efi_main(
         g: 20,
         b: 20,
     };
-    framebuffer.fill(0, 0, width, height, framebuffer.color(background));
+    framebuffer.fill(0, 0, width, height, FramebufferColor::new(background));
 
     // get memory map
     let mut memory_map_size = 0;

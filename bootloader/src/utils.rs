@@ -1,5 +1,5 @@
 use crate::{
-    framebuffer::{Color, framebuffer},
+    framebuffer::{Color, FramebufferColor, framebuffer},
     text_writer::TextWriter,
 };
 use core::arch::asm;
@@ -59,7 +59,7 @@ pub fn error_screen<R>(f: impl FnOnce(&mut TextWriter<'_>) -> R) -> R {
         0,
         framebuffer.width(),
         framebuffer.height(),
-        framebuffer.color(background),
+        FramebufferColor::new(background),
     );
 
     let mut text_writer = TextWriter {

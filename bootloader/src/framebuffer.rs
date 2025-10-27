@@ -56,13 +56,6 @@ unsafe impl Send for Framebuffer {}
 unsafe impl Sync for Framebuffer {}
 
 impl Framebuffer {
-    pub fn color(&self, color: Color) -> FramebufferColor {
-        FramebufferColor(u32::from_ne_bytes(match self.format {
-            FrameBufferFormat::Rgb => [color.r, color.g, color.b, 0x00],
-            FrameBufferFormat::Bgr => [color.b, color.g, color.r, 0x00],
-        }))
-    }
-
     pub fn base(&self) -> usize {
         self.pixels_base.addr()
     }
@@ -115,6 +108,15 @@ impl Framebuffer {
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct FramebufferColor(u32);
+
+impl FramebufferColor {
+    pub fn new(color: Color) -> Self {
+        FramebufferColor(u32::from_ne_bytes(match framebuffer().format {
+            FrameBufferFormat::Rgb => [color.r, color.g, color.b, 0x00],
+            FrameBufferFormat::Bgr => [color.b, color.g, color.r, 0x00],
+        }))
+    }
+}
 
 static FRAMEBUFFER: SyncUnsafeCell<Framebuffer> = SyncUnsafeCell::new(Framebuffer {
     format: FrameBufferFormat::Rgb,

@@ -4,7 +4,7 @@ use crate::{
         ps2_keyboard::{KEYBOARD_STATE, Key, keyboard_handler, setup_keyboard},
         ps2_mouse::{MOUSE_STATE, mouse_handler, setup_mouse},
     },
-    framebuffer::framebuffer,
+    framebuffer::{FramebufferColor, framebuffer},
     gdt::setup_gdt,
     idt::{InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_idt_entry},
     print::{GLOBAL_PRINTER, println},
@@ -77,6 +77,6 @@ fn clear_screen() {
         0,
         framebuffer.width(),
         framebuffer.height(),
-        framebuffer.color(background_color),
+        FramebufferColor::new(background_color),
     );
 }
