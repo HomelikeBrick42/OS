@@ -8,10 +8,10 @@
 )]
 
 use crate::{
-    framebuffer::{framebuffer, init_framebuffer, Color, FramebufferColor},
+    framebuffer::{Color, FramebufferColor, framebuffer, init_framebuffer},
     idt::disable_interrupts,
     kernel::kernel_main,
-    page_allocator::{init_page_allocator, PAGE_ALLOCATOR},
+    page_allocator::{PAGE_ALLOCATOR, init_page_allocator},
     utils::{error_screen, hlt},
 };
 use core::{arch::asm, fmt::Write};
@@ -25,11 +25,10 @@ pub mod idt;
 pub mod interrupt_safe_mutex;
 pub mod kernel;
 pub mod page_allocator;
-pub mod print;
 pub mod rust_global_allocators;
+pub mod screen;
 pub mod text_writer;
 pub mod utils;
-pub mod screen;
 
 extern crate alloc;
 

@@ -1,5 +1,3 @@
-use alloc::vec;
-
 use crate::{
     drivers::{
         pic::{PIC1_DATA, PIC2_DATA, remap_pic},
@@ -8,32 +6,24 @@ use crate::{
     },
     framebuffer::{Color, framebuffer},
     gdt::setup_gdt,
-    idt::{
-        InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_disabled_interrupts,
-        with_idt_entry,
-    },
-    print::{GLOBAL_PRINTER, println},
-    screen::Pixels,
-    utils::{hlt, io_wait, outb},
+    idt::{InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_idt_entry},
+    screen::{Pixels, Screen},
+    text_writer::TextWriter,
+    utils::{io_wait, outb},
 };
-use core::cell::SyncUnsafeCell;
+use alloc::vec;
+use core::fmt::Write;
+use font::SPACE_MONO;
 
 pub unsafe extern "win64" fn kernel_main() -> ! {
     unsafe { disable_interrupts() };
 
-    let mut framebuffer = framebuffer();
-    {
-        static PIXELS: SyncUnsafeCell<Pixels> = SyncUnsafeCell::new(Pixels::zero_size());
-        let pixels = unsafe { &mut *PIXELS.get() };
-        *pixels = Pixels::new(
-            Color { r: 0, g: 0, b: 0 },
-            framebuffer.width(),
-            framebuffer.height(),
-        );
-        GLOBAL_PRINTER.with(|printer| printer.screen = Some(pixels));
-    }
-
-    clear_screen();
+    let framebuffer = framebuffer();
+    let mut pixels = Pixels::new(
+        Color { r: 0, g: 0, b: 0 },
+        framebuffer.width(),
+        framebuffer.height(),
+    );
 
     unsafe { setup_gdt() };
     unsafe { setup_idt() };
@@ -89,51 +79,43 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
             }
         });
 
-        if changed {
-            with_disabled_interrupts(|| {
-                clear_screen();
+        let background = Color {
+            r: 50,
+            g: 50,
+            b: 50,
+        };
+        pixels.fill(0, 0, pixels.width(), pixels.height(), background);
 
-                for event in &events {
-                    println!("{event:?}");
-                }
-
-                GLOBAL_PRINTER.with(|printer| {
-                    let framebuffer_ = framebuffer;
-                    let screen = printer.screen.as_deref_mut().unwrap_or(&mut framebuffer);
-                    screen.fill(
-                        mouse_x.saturating_sub(5),
-                        mouse_y.saturating_sub(5),
-                        10,
-                        10,
-                        Color {
-                            r: 255,
-                            g: 255,
-                            b: 255,
-                        },
-                    );
-                    framebuffer_.copy(screen, 0, 0);
-                });
-            });
-        } else {
-            hlt();
+        {
+            let mut writer = TextWriter {
+                x: &mut 0,
+                y: &mut 0,
+                left_margin: 0,
+                text_color: Color {
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                },
+                background,
+                font: &SPACE_MONO,
+                screen: &mut pixels,
+            };
+            for event in &events {
+                writeln!(writer, "{event:?}").unwrap();
+            }
         }
-    }
-}
 
-fn clear_screen() {
-    GLOBAL_PRINTER.with(|printer| {
-        printer.x = 0;
-        printer.y = 0;
-        printer.left_margin = 0;
-
-        let mut framebuffer = framebuffer();
-        let screen = printer.screen.as_deref_mut().unwrap_or(&mut framebuffer);
-        screen.fill(
-            0,
-            0,
-            screen.width(),
-            screen.height(),
-            printer.background_color,
+        pixels.fill(
+            mouse_x.saturating_sub(5),
+            mouse_y.saturating_sub(5),
+            10,
+            10,
+            Color {
+                r: 255,
+                g: 255,
+                b: 255,
+            },
         );
-    });
+        framebuffer.copy(&pixels, 0, 0);
+    }
 }

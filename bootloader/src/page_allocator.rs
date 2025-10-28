@@ -1,5 +1,5 @@
-use crate::{efi, hlt, interrupt_safe_mutex::InterruptSafeMutex, print::println};
-use core::num::NonZeroUsize;
+use crate::{efi, hlt, interrupt_safe_mutex::InterruptSafeMutex, utils::error_screen};
+use core::{fmt::Write, num::NonZeroUsize};
 
 #[derive(Debug)]
 pub struct Block {
@@ -232,10 +232,17 @@ pub unsafe fn init_page_allocator(
         }
     }
     if size_so_far < required_allocator_size {
-        println!("Cannot find enough memory to store page allocator state");
-        loop {
-            hlt();
-        }
+        error_screen(|writer| {
+            writeln!(
+                writer,
+                "Cannot find enough memory to store page allocator state"
+            )
+            .unwrap();
+
+            loop {
+                hlt();
+            }
+        })
     }
 
     unsafe { core::ptr::write_bytes(ptr, 0, required_allocator_size) };
