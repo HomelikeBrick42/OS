@@ -79,43 +79,45 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
             }
         });
 
-        let background = Color {
-            r: 50,
-            g: 50,
-            b: 50,
-        };
-        pixels.fill(0, 0, pixels.width(), pixels.height(), background);
+        if changed {
+            let background = Color {
+                r: 50,
+                g: 50,
+                b: 50,
+            };
+            pixels.fill(0, 0, pixels.width(), pixels.height(), background);
 
-        {
-            let mut writer = TextWriter {
-                x: &mut 0,
-                y: &mut 0,
-                left_margin: 0,
-                text_color: Color {
+            {
+                let mut writer = TextWriter {
+                    x: &mut 0,
+                    y: &mut 0,
+                    left_margin: 0,
+                    text_color: Color {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                    },
+                    background,
+                    font: &SPACE_MONO,
+                    screen: &mut pixels,
+                };
+                for event in &events {
+                    writeln!(writer, "{event:?}").unwrap();
+                }
+            }
+
+            pixels.fill(
+                mouse_x.saturating_sub(5),
+                mouse_y.saturating_sub(5),
+                10,
+                10,
+                Color {
                     r: 255,
                     g: 255,
                     b: 255,
                 },
-                background,
-                font: &SPACE_MONO,
-                screen: &mut pixels,
-            };
-            for event in &events {
-                writeln!(writer, "{event:?}").unwrap();
-            }
+            );
+            framebuffer.copy(&pixels, 0, 0);
         }
-
-        pixels.fill(
-            mouse_x.saturating_sub(5),
-            mouse_y.saturating_sub(5),
-            10,
-            10,
-            Color {
-                r: 255,
-                g: 255,
-                b: 255,
-            },
-        );
-        framebuffer.copy(&pixels, 0, 0);
     }
 }
