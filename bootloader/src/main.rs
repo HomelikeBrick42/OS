@@ -29,6 +29,7 @@ pub mod print;
 pub mod rust_global_allocators;
 pub mod text_writer;
 pub mod utils;
+pub mod screen;
 
 extern crate alloc;
 

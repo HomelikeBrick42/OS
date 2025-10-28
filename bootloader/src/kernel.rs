@@ -4,15 +4,29 @@ use crate::{
         ps2_keyboard::{KEYBOARD_STATE, Key, keyboard_handler, setup_keyboard},
         ps2_mouse::{MOUSE_STATE, mouse_handler, setup_mouse},
     },
-    framebuffer::{FramebufferColor, framebuffer},
+    framebuffer::{Color, framebuffer},
     gdt::setup_gdt,
     idt::{InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_idt_entry},
     print::{GLOBAL_PRINTER, println},
-    utils::{hlt, io_wait, outb},
+    screen::Pixels,
+    utils::{io_wait, outb},
 };
+use core::cell::SyncUnsafeCell;
 
 pub unsafe extern "win64" fn kernel_main() -> ! {
     unsafe { disable_interrupts() };
+
+    let framebuffer = framebuffer();
+    {
+        static PIXELS: SyncUnsafeCell<Pixels> = SyncUnsafeCell::new(Pixels::zero_size());
+        let pixels = unsafe { &mut *PIXELS.get() };
+        *pixels = Pixels::new(
+            Color { r: 0, g: 0, b: 0 },
+            framebuffer.width(),
+            framebuffer.height(),
+        );
+        GLOBAL_PRINTER.with(|printer| printer.screen = Some(pixels));
+    }
 
     clear_screen();
 
@@ -59,24 +73,28 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
             }
         });
 
-        hlt();
+        GLOBAL_PRINTER.with(|printer| {
+            if let Some(screen) = printer.screen.as_deref_mut() {
+                framebuffer.copy(screen, 0, 0);
+            }
+        });
     }
 }
 
 fn clear_screen() {
-    let background_color = GLOBAL_PRINTER.with(|printer| {
+    GLOBAL_PRINTER.with(|printer| {
         printer.x = 0;
         printer.y = 0;
         printer.left_margin = 0;
-        printer.background_color
-    });
 
-    let framebuffer = framebuffer();
-    framebuffer.fill(
-        0,
-        0,
-        framebuffer.width(),
-        framebuffer.height(),
-        FramebufferColor::new(background_color),
-    );
+        let mut framebuffer = framebuffer();
+        let screen = printer.screen.as_deref_mut().unwrap_or(&mut framebuffer);
+        screen.fill(
+            0,
+            0,
+            screen.width(),
+            screen.height(),
+            printer.background_color,
+        );
+    });
 }

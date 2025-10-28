@@ -1,6 +1,7 @@
 use crate::{
     framebuffer::{Color, framebuffer},
     interrupt_safe_mutex::InterruptSafeMutex,
+    screen::Screen,
     text_writer::TextWriter,
 };
 use core::fmt::Write;
@@ -39,6 +40,7 @@ pub struct GlobalPrinter {
     pub text_color: Color,
     pub background_color: Color,
     pub font: &'static Font<'static>,
+    pub screen: Option<&'static mut (dyn Screen + Send)>,
 }
 
 impl Write for GlobalPrinter {
@@ -50,7 +52,7 @@ impl Write for GlobalPrinter {
             text_color: self.text_color,
             background: self.background_color,
             font: self.font,
-            framebuffer: framebuffer(),
+            screen: self.screen.as_deref_mut().unwrap_or(&mut framebuffer()),
         }
         .write_str(s)
     }
@@ -63,7 +65,7 @@ impl Write for GlobalPrinter {
             text_color: self.text_color,
             background: self.background_color,
             font: self.font,
-            framebuffer: framebuffer(),
+            screen: self.screen.as_deref_mut().unwrap_or(&mut framebuffer()),
         }
         .write_char(c)
     }
@@ -76,7 +78,7 @@ impl Write for GlobalPrinter {
             text_color: self.text_color,
             background: self.background_color,
             font: self.font,
-            framebuffer: framebuffer(),
+            screen: self.screen.as_deref_mut().unwrap_or(&mut framebuffer()),
         }
         .write_fmt(args)
     }
@@ -98,4 +100,5 @@ pub static GLOBAL_PRINTER: InterruptSafeMutex<GlobalPrinter> =
             b: 50,
         },
         font: &SPACE_MONO,
+        screen: None,
     });

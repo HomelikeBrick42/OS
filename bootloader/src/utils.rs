@@ -51,7 +51,7 @@ pub fn get_flags() -> u64 {
 }
 
 pub fn error_screen<R>(f: impl FnOnce(&mut TextWriter<'_>) -> R) -> R {
-    let framebuffer = framebuffer();
+    let mut framebuffer = framebuffer();
 
     let background = Color { r: 255, g: 0, b: 0 };
     framebuffer.fill(
@@ -73,7 +73,7 @@ pub fn error_screen<R>(f: impl FnOnce(&mut TextWriter<'_>) -> R) -> R {
         },
         background,
         font: &SPACE_MONO,
-        framebuffer,
+        screen: &mut framebuffer,
     };
 
     f(&mut text_writer)

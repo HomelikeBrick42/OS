@@ -1,4 +1,4 @@
-use crate::efi;
+use crate::{efi, screen::Screen};
 use core::{arch::asm, cell::SyncUnsafeCell};
 use utf16_literal::utf16;
 
@@ -72,14 +72,19 @@ impl Framebuffer {
         self.pixels_height
     }
 
-    unsafe fn set_pixel_unchecked(&self, x: usize, y: usize, color: FramebufferColor) {
+    unsafe fn set_pixel_raw(&self, x: usize, y: usize, color: FramebufferColor) {
         let pixel = unsafe { self.pixels_base.add(x + y * self.pixels_per_scanline) };
         unsafe { pixel.write(color) };
     }
 
+    unsafe fn get_pixel_raw(&self, x: usize, y: usize) -> FramebufferColor {
+        let pixel = unsafe { self.pixels_base.add(x + y * self.pixels_per_scanline) };
+        unsafe { pixel.read() }
+    }
+
     pub fn set_pixel(&self, x: usize, y: usize, color: FramebufferColor) {
         if x < self.pixels_width && y < self.pixels_height {
-            unsafe { self.set_pixel_unchecked(x, y, color) };
+            unsafe { self.set_pixel_raw(x, y, color) };
             unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
         }
     }
@@ -98,10 +103,74 @@ impl Framebuffer {
         let right = left.saturating_add(width).min(self.pixels_width);
         for y in top..bottom {
             for x in left..right {
-                unsafe { self.set_pixel_unchecked(x, y, color) };
+                unsafe { self.set_pixel_raw(x, y, color) };
             }
         }
         unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
+    }
+
+    pub fn copy(&self, screen: &dyn Screen, left: usize, top: usize) {
+        let width = screen.width();
+        let height = screen.height();
+
+        let top = top.min(self.pixels_height);
+        let bottom = top.saturating_add(height).min(self.pixels_height);
+        let left = left.min(self.pixels_width);
+        let right = left.saturating_add(width).min(self.pixels_width);
+
+        for y in top..bottom {
+            for x in left..right {
+                unsafe {
+                    self.set_pixel_raw(
+                        x,
+                        y,
+                        FramebufferColor::new(screen.get_pixel_unchecked(x - left, y - top)),
+                    );
+                }
+            }
+        }
+
+        unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
+    }
+}
+
+impl Screen for &Framebuffer {
+    fn width(&self) -> usize {
+        self.pixels_width
+    }
+
+    fn height(&self) -> usize {
+        self.pixels_height
+    }
+
+    unsafe fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: Color) {
+        unsafe { self.set_pixel_raw(x, y, FramebufferColor::new(color)) };
+        unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
+    }
+
+    unsafe fn get_pixel_unchecked(&self, x: usize, y: usize) -> Color {
+        unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
+        unsafe { self.get_pixel_raw(x, y).color() }
+    }
+
+    fn set_pixel(&mut self, x: usize, y: usize, color: Color) {
+        (*self).set_pixel(x, y, FramebufferColor::new(color))
+    }
+
+    fn get_pixel(&self, x: usize, y: usize) -> Option<Color> {
+        if x < self.width() && y < self.height() {
+            Some(unsafe { self.get_pixel_unchecked(x, y) })
+        } else {
+            None
+        }
+    }
+
+    fn fill(&mut self, left: usize, top: usize, width: usize, height: usize, color: Color) {
+        (*self).fill(left, top, width, height, FramebufferColor::new(color))
+    }
+
+    fn copy(&mut self, screen: &dyn Screen, left: usize, top: usize) {
+        (*self).copy(screen, left, top)
     }
 }
 
@@ -115,6 +184,15 @@ impl FramebufferColor {
             FrameBufferFormat::Rgb => [color.r, color.g, color.b, 0x00],
             FrameBufferFormat::Bgr => [color.b, color.g, color.r, 0x00],
         }))
+    }
+
+    pub fn color(&self) -> Color {
+        let [x, y, z, _] = u32::to_ne_bytes(self.0);
+        let (r, g, b) = match framebuffer().format {
+            FrameBufferFormat::Rgb => (x, y, z),
+            FrameBufferFormat::Bgr => (z, y, x),
+        };
+        Color { r, g, b }
     }
 }
 
