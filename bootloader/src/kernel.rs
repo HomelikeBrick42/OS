@@ -1,3 +1,5 @@
+use alloc::vec;
+
 use crate::{
     drivers::{
         pic::{PIC1_DATA, PIC2_DATA, remap_pic},
@@ -6,17 +8,20 @@ use crate::{
     },
     framebuffer::{Color, framebuffer},
     gdt::setup_gdt,
-    idt::{InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_idt_entry},
+    idt::{
+        InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_disabled_interrupts,
+        with_idt_entry,
+    },
     print::{GLOBAL_PRINTER, println},
     screen::Pixels,
-    utils::{io_wait, outb},
+    utils::{hlt, io_wait, outb},
 };
 use core::cell::SyncUnsafeCell;
 
 pub unsafe extern "win64" fn kernel_main() -> ! {
     unsafe { disable_interrupts() };
 
-    let framebuffer = framebuffer();
+    let mut framebuffer = framebuffer();
     {
         static PIXELS: SyncUnsafeCell<Pixels> = SyncUnsafeCell::new(Pixels::zero_size());
         let pixels = unsafe { &mut *PIXELS.get() };
@@ -56,28 +61,62 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
 
     unsafe { enable_interrupts() };
 
+    let mut changed = true;
+    let mut events = vec![];
+
+    let mut mouse_x = 0usize;
+    let mut mouse_y = 0usize;
     loop {
         KEYBOARD_STATE.with(|keyboard| {
             while let Some(event) = keyboard.next_event() {
-                println!("{event:?}");
+                changed = true;
                 if matches!(event.key, Key::Backspace) {
-                    clear_screen();
+                    events.clear();
                 }
+                events.push(event);
             }
         });
 
         MOUSE_STATE.with(|mouse| {
             while let Some(event) = mouse.next_event() {
-                clear_screen();
-                println!("{event:#?}");
+                changed = true;
+                mouse_x = mouse_x
+                    .saturating_add_signed(event.x_offset as isize)
+                    .min(framebuffer.width());
+                mouse_y = mouse_y
+                    .saturating_add_signed(-(event.y_offset as isize))
+                    .min(framebuffer.height());
             }
         });
 
-        GLOBAL_PRINTER.with(|printer| {
-            if let Some(screen) = printer.screen.as_deref_mut() {
-                framebuffer.copy(screen, 0, 0);
-            }
-        });
+        if changed {
+            with_disabled_interrupts(|| {
+                clear_screen();
+
+                for event in &events {
+                    println!("{event:?}");
+                }
+
+                GLOBAL_PRINTER.with(|printer| {
+                    let framebuffer_ = framebuffer;
+                    let screen = printer.screen.as_deref_mut().unwrap_or(&mut framebuffer);
+                    screen.fill(
+                        mouse_x.saturating_sub(5),
+                        mouse_y.saturating_sub(5),
+                        10,
+                        10,
+                        Color {
+                            r: 255,
+                            g: 255,
+                            b: 255,
+                        },
+                    );
+                    framebuffer_.copy(screen, 0, 0);
+                });
+            });
+        } else {
+            hlt();
+        }
     }
 }
 
