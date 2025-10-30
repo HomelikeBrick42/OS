@@ -66,6 +66,8 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
         )
     };
 
+    let max_extended_cpuid = unsafe { cpuid(0x80000000, MaybeUninit::uninit()).eax };
+
     let mut changed = true;
     let mut events = vec![];
 
@@ -116,8 +118,9 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
                     font: &SPACE_MONO,
                     screen: &mut pixels,
                 };
-                writeln!(writer, "Max CPUID: {}", max_cpuid).unwrap();
-                writeln!(writer, "Cpu Name: '{}'", cpu_name).unwrap();
+                writeln!(writer, "Max CPUID: {:#X}", max_cpuid).unwrap();
+                writeln!(writer, "Max Extended CPUID: {:#X}", max_extended_cpuid).unwrap();
+                writeln!(writer, "Cpu Name: {:?}", cpu_name).unwrap();
                 for event in &events {
                     writeln!(writer, "{event:?}").unwrap();
                 }
