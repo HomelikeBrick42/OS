@@ -13,8 +13,8 @@ pub unsafe fn inb<const PORT: u16>() -> u8 {
     let value;
     unsafe {
         asm!(
-            "in al, {port}",
-            port = const PORT,
+            "in al, {PORT}",
+            PORT = const PORT,
             out("al") value,
             options(nomem, nostack)
         );
@@ -25,8 +25,8 @@ pub unsafe fn inb<const PORT: u16>() -> u8 {
 pub unsafe fn outb<const PORT: u16>(value: u8) {
     unsafe {
         asm!(
-            "out {port}, al",
-            port = const PORT,
+            "out {PORT}, al",
+            PORT = const PORT,
             in("al") value,
             options(nomem, nostack)
         );

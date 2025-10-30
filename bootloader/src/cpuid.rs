@@ -8,22 +8,25 @@ pub struct CpuidRegisters {
 }
 
 pub fn is_cpuid_supported() -> bool {
+    const ID_MASK: u32 = 0x00200000;
+
     let changed_flags: u32;
     unsafe {
         asm!(
             "pushfq",
             "pushfq",
-            "xor dword ptr [rsp], 0x00200000",
+            "xor dword ptr [rsp], {ID_MASK}",
             "popfq",
             "pushfq",
             "pop rax",
             "xor eax, [rsp]",
             "popfq",
+            ID_MASK = const ID_MASK,
             out("eax") changed_flags,
             options(nomem)
         );
     }
-    changed_flags & 0x00200000 != 0
+    changed_flags & ID_MASK != 0
 }
 
 pub unsafe fn cpuid(in_eax: u32, in_ecx: MaybeUninit<u32>) -> CpuidRegisters {
