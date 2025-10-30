@@ -113,18 +113,17 @@ impl Framebuffer {
         unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
     }
 
-    pub fn copy(&self, screen: &FramebufferColorPixels, left: usize, top: usize) {
-        let width = screen.width();
-        let height = screen.height();
+    pub fn copy_fullscreen(&self, screen: &FramebufferColorPixels) {
+        assert_eq!(screen.width(), self.width());
+        assert_eq!(screen.height(), self.height());
 
-        let top = top.min(self.pixels_height);
-        let bottom = top.saturating_add(height).min(self.pixels_height);
-        let left = left.min(self.pixels_width);
-        let right = left.saturating_add(width).min(self.pixels_width);
-
-        for y in top..bottom {
-            for x in left..right {
-                unsafe { self.set_pixel_raw(x, y, screen.get_pixel_unchecked(x - left, y - top)) };
+        for y in 0..self.pixels_height {
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    screen.pixels().add(y * self.pixels_width),
+                    self.pixels_base.add(y * self.pixels_per_scanline),
+                    self.pixels_width,
+                );
             }
         }
 

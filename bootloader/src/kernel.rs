@@ -117,7 +117,7 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
                     b: 255,
                 },
             );
-            framebuffer.copy(&pixels, 0, 0);
+            framebuffer.copy_fullscreen(&pixels);
         }
     }
 }

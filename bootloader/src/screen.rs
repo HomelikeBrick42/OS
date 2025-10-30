@@ -125,8 +125,8 @@ impl FramebufferColorPixels {
         }
     }
 
-    pub unsafe fn get_pixel_unchecked(&self, x: usize, y: usize) -> FramebufferColor {
-        unsafe { *self.pixels.get_unchecked(x + y * self.width) }
+    pub fn pixels(&self) -> *const FramebufferColor {
+        self.pixels.as_ptr()
     }
 }
 
