@@ -72,10 +72,10 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
                 changed = true;
                 mouse_x = mouse_x
                     .saturating_add_signed(event.x_offset as isize)
-                    .min(framebuffer.width());
+                    .min(framebuffer.width() - 1);
                 mouse_y = mouse_y
                     .saturating_add_signed(-(event.y_offset as isize))
-                    .min(framebuffer.height());
+                    .min(framebuffer.height() - 1);
             }
         });
 
@@ -107,8 +107,8 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
             }
 
             pixels.fill(
-                mouse_x.saturating_sub(5),
-                mouse_y.saturating_sub(5),
+                mouse_x,
+                mouse_y,
                 10,
                 10,
                 Color {
