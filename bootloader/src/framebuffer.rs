@@ -1,8 +1,12 @@
-use crate::{efi, screen::Screen};
+use crate::{
+    efi,
+    screen::{FramebufferColorPixels, Screen},
+};
 use core::{arch::asm, cell::SyncUnsafeCell};
 use utf16_literal::utf16;
 
 #[derive(Debug, Clone, Copy)]
+#[repr(C)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -109,7 +113,7 @@ impl Framebuffer {
         unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
     }
 
-    pub fn copy(&self, screen: &dyn Screen, left: usize, top: usize) {
+    pub fn copy(&self, screen: &FramebufferColorPixels, left: usize, top: usize) {
         let width = screen.width();
         let height = screen.height();
 
@@ -120,13 +124,7 @@ impl Framebuffer {
 
         for y in top..bottom {
             for x in left..right {
-                unsafe {
-                    self.set_pixel_raw(
-                        x,
-                        y,
-                        FramebufferColor::new(screen.get_pixel_unchecked(x - left, y - top)),
-                    );
-                }
+                unsafe { self.set_pixel_raw(x, y, screen.get_pixel_unchecked(x - left, y - top)) };
             }
         }
 
@@ -170,24 +168,44 @@ impl Screen for &Framebuffer {
     }
 
     fn copy(&mut self, screen: &dyn Screen, left: usize, top: usize) {
-        (*self).copy(screen, left, top)
+        let width = screen.width();
+        let height = screen.height();
+
+        let top = top.min(self.pixels_height);
+        let bottom = top.saturating_add(height).min(self.pixels_height);
+        let left = left.min(self.pixels_width);
+        let right = left.saturating_add(width).min(self.pixels_width);
+
+        for y in top..bottom {
+            for x in left..right {
+                unsafe {
+                    self.set_pixel_raw(
+                        x,
+                        y,
+                        FramebufferColor::new(screen.get_pixel_unchecked(x - left, y - top)),
+                    );
+                }
+            }
+        }
+
+        unsafe { asm!("/* {0} */", in(reg) self.pixels_base, options(nostack)) };
     }
 }
 
 #[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct FramebufferColor(u32);
+#[repr(C, align(4))]
+pub struct FramebufferColor([u8; 3]);
 
 impl FramebufferColor {
     pub fn new(color: Color) -> Self {
-        FramebufferColor(u32::from_ne_bytes(match framebuffer().format {
-            FrameBufferFormat::Rgb => [color.r, color.g, color.b, 0x00],
-            FrameBufferFormat::Bgr => [color.b, color.g, color.r, 0x00],
-        }))
+        FramebufferColor(match framebuffer().format {
+            FrameBufferFormat::Rgb => [color.r, color.g, color.b],
+            FrameBufferFormat::Bgr => [color.b, color.g, color.r],
+        })
     }
 
-    pub fn color(&self) -> Color {
-        let [x, y, z, _] = u32::to_ne_bytes(self.0);
+    pub fn color(self) -> Color {
+        let [x, y, z] = self.0;
         let (r, g, b) = match framebuffer().format {
             FrameBufferFormat::Rgb => (x, y, z),
             FrameBufferFormat::Bgr => (z, y, x),

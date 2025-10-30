@@ -1,6 +1,5 @@
+use crate::framebuffer::{Color, FramebufferColor};
 use alloc::{vec, vec::Vec};
-
-use crate::framebuffer::Color;
 
 pub trait Screen {
     fn width(&self) -> usize;
@@ -93,10 +92,60 @@ impl Screen for Pixels {
     }
 
     unsafe fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: Color) {
-        unsafe { *self.pixels.get_unchecked_mut(x + y * self.width) = color };
+        unsafe {
+            *self.pixels.get_unchecked_mut(x + y * self.width) = color;
+        }
     }
 
     unsafe fn get_pixel_unchecked(&self, x: usize, y: usize) -> Color {
         unsafe { *self.pixels.get_unchecked(x + y * self.width) }
+    }
+}
+
+pub struct FramebufferColorPixels {
+    pixels: Vec<FramebufferColor>,
+    width: usize,
+    height: usize,
+}
+
+impl FramebufferColorPixels {
+    pub const fn zero_size() -> Self {
+        Self {
+            pixels: vec![],
+            width: 0,
+            height: 0,
+        }
+    }
+
+    pub fn new(color: FramebufferColor, width: usize, height: usize) -> Self {
+        Self {
+            pixels: vec![color; width * height],
+            width,
+            height,
+        }
+    }
+
+    pub unsafe fn get_pixel_unchecked(&self, x: usize, y: usize) -> FramebufferColor {
+        unsafe { *self.pixels.get_unchecked(x + y * self.width) }
+    }
+}
+
+impl Screen for FramebufferColorPixels {
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+
+    unsafe fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: Color) {
+        unsafe {
+            *self.pixels.get_unchecked_mut(x + y * self.width) = FramebufferColor::new(color);
+        }
+    }
+
+    unsafe fn get_pixel_unchecked(&self, x: usize, y: usize) -> Color {
+        unsafe { self.pixels.get_unchecked(x + y * self.width).color() }
     }
 }

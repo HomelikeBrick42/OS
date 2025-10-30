@@ -4,10 +4,10 @@ use crate::{
         ps2_keyboard::{KEYBOARD_STATE, Key, keyboard_handler, setup_keyboard},
         ps2_mouse::{MOUSE_STATE, mouse_handler, setup_mouse},
     },
-    framebuffer::{Color, framebuffer},
+    framebuffer::{Color, FramebufferColor, framebuffer},
     gdt::setup_gdt,
     idt::{InterruptType, disable_interrupts, enable_interrupts, setup_idt, with_idt_entry},
-    screen::{Pixels, Screen},
+    screen::{FramebufferColorPixels, Screen},
     text_writer::TextWriter,
     utils::{io_wait, outb},
 };
@@ -19,8 +19,8 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
     unsafe { disable_interrupts() };
 
     let framebuffer = framebuffer();
-    let mut pixels = Pixels::new(
-        Color { r: 0, g: 0, b: 0 },
+    let mut pixels = FramebufferColorPixels::new(
+        FramebufferColor::new(Color { r: 0, g: 0, b: 0 }),
         framebuffer.width(),
         framebuffer.height(),
     );
