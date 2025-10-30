@@ -1,4 +1,5 @@
 use crate::{
+    cpuid::{cpuid, is_cpuid_supported},
     drivers::{
         pic::{PIC1_DATA, PIC2_DATA, remap_pic},
         ps2_keyboard::{KEYBOARD_STATE, Key, keyboard_handler, setup_keyboard},
@@ -12,7 +13,7 @@ use crate::{
     utils::{io_wait, outb},
 };
 use alloc::vec;
-use core::fmt::Write;
+use core::{fmt::Write, mem::MaybeUninit};
 use font::SPACE_MONO;
 
 pub unsafe extern "win64" fn kernel_main() -> ! {
@@ -50,6 +51,20 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
     io_wait();
 
     unsafe { enable_interrupts() };
+
+    assert!(is_cpuid_supported());
+
+    let mut cpu_name = [0u8; 12];
+    let (max_cpuid, cpu_name) = {
+        let result = unsafe { cpuid(0, MaybeUninit::uninit()) };
+        cpu_name[0..4].copy_from_slice(&result.ebx.to_ne_bytes());
+        cpu_name[4..8].copy_from_slice(&result.edx.to_ne_bytes());
+        cpu_name[8..12].copy_from_slice(&result.ecx.to_ne_bytes());
+        (
+            result.eax,
+            core::str::from_utf8(&cpu_name).expect("the cpu name should be valid utf8"),
+        )
+    };
 
     let mut changed = true;
     let mut events = vec![];
@@ -101,6 +116,8 @@ pub unsafe extern "win64" fn kernel_main() -> ! {
                     font: &SPACE_MONO,
                     screen: &mut pixels,
                 };
+                writeln!(writer, "Max CPUID: {}", max_cpuid).unwrap();
+                writeln!(writer, "Cpu Name: '{}'", cpu_name).unwrap();
                 for event in &events {
                     writeln!(writer, "{event:?}").unwrap();
                 }

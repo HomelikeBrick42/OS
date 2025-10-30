@@ -41,7 +41,7 @@ pub fn get_flags() -> u64 {
     let flags;
     unsafe {
         asm!(
-            "pushf",
+            "pushfq",
             "pop rax",
             out("rax") flags,
             options(nomem)
