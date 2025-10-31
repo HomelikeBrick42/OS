@@ -1,5 +1,5 @@
 use crate::{efi, hlt, interrupt_safe_mutex::InterruptSafeMutex, utils::error_screen};
-use core::{fmt::Write, num::NonZeroUsize};
+use core::{alloc::Layout, fmt::Write};
 
 #[derive(Debug)]
 pub struct Block {
@@ -54,9 +54,9 @@ impl PageAllocator {
         None
     }
 
-    pub fn allocate(&mut self, alignment: NonZeroUsize, size: usize) -> Option<usize> {
-        if size == 0 {
-            return Some(alignment.get());
+    pub fn allocate(&mut self, layout: Layout) -> Option<usize> {
+        if layout.size() == 0 {
+            return None;
         }
 
         for block in self.blocks {
@@ -76,7 +76,7 @@ impl PageAllocator {
 
                 if start.is_none() {
                     // make sure its aligned if the allocation is starting here
-                    if (block.start_address + page * 4096) % alignment.get() != 0 {
+                    if (block.start_address + page * 4096) % layout.align() != 0 {
                         continue;
                     }
                     start = Some(block.start_address + page * 4096);
@@ -84,9 +84,9 @@ impl PageAllocator {
                 seen_count += 4096;
 
                 if let Some(start) = start
-                    && seen_count >= size
+                    && seen_count >= layout.size()
                 {
-                    for i in 0..size.div_ceil(4096) {
+                    for i in 0..layout.size().div_ceil(4096) {
                         let index = block.bitmap_start + (start - block.start_address) / 4096 + i;
                         let bitmap_index = index / u8::BITS as usize;
                         let bit_index = index % u8::BITS as usize;
@@ -99,12 +99,8 @@ impl PageAllocator {
         None
     }
 
-    pub unsafe fn free(&mut self, address: usize, size: usize) {
-        if size == 0 {
-            return;
-        }
-
-        for i in 0..size.div_ceil(4096) {
+    pub unsafe fn free(&mut self, address: usize, layout: Layout) {
+        for i in 0..layout.size().div_ceil(4096) {
             unsafe { self.set_allocated(address + i * 4096, false) };
         }
     }

@@ -14,9 +14,10 @@ use crate::{
     page_allocator::{PAGE_ALLOCATOR, init_page_allocator},
     utils::{error_screen, hlt},
 };
-use core::{arch::asm, fmt::Write};
-use core::{num::NonZeroUsize, panic::PanicInfo};
+use core::panic::PanicInfo;
+use core::{alloc::Layout, arch::asm, fmt::Write};
 
+pub mod cpuid;
 pub mod drivers;
 pub mod efi;
 pub mod framebuffer;
@@ -29,7 +30,6 @@ pub mod rust_global_allocators;
 pub mod screen;
 pub mod text_writer;
 pub mod utils;
-pub mod cpuid;
 
 extern crate alloc;
 
@@ -97,11 +97,10 @@ unsafe extern "efiapi" fn efi_main(
 
     unsafe {
         let stack_size = 4 * 1024 * 1024;
-        let stack = PAGE_ALLOCATOR.with(|alloc| {
-            alloc
-                .allocate(const { NonZeroUsize::new(16).unwrap() }, stack_size)
-                .expect("allocating the stack should succeed")
-        });
+        let layout = Layout::from_size_align(stack_size, 16).unwrap();
+        let stack = PAGE_ALLOCATOR
+            .with(|alloc| alloc.allocate(layout))
+            .expect("allocating the stack should succeed");
 
         let stack_start = stack + stack_size;
         let _: unsafe extern "win64" fn() -> ! = kernel_main;
