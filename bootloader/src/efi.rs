@@ -1,4 +1,4 @@
-use core::{num::NonZeroIsize, ptr::NonNull};
+use core::{fmt::Debug, num::NonZeroIsize, ptr::NonNull};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
@@ -241,25 +241,50 @@ pub enum AllocateType {
     Address,
 }
 
-#[derive(Debug, Clone, Copy)]
-#[repr(u32)]
-pub enum MemoryType {
-    ReservedMemoryType,
-    LoaderCode,
-    LoaderData,
-    BootServicesCode,
-    BootServicesData,
-    RuntimeServicesCode,
-    RuntimeServicesData,
-    ConventionalMemory,
-    UnusableMemory,
-    ACPIReclaimMemory,
-    ACPIMemoryNVS,
-    MemoryMappedIO,
-    MemoryMappedIOPortSpace,
-    PalCode,
-    PersistentMemory,
-    UnacceptedMemoryType,
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct MemoryType(u32);
+
+#[allow(non_upper_case_globals)]
+impl MemoryType {
+    pub const ReservedMemoryType: Self = Self(0);
+    pub const LoaderCode: Self = Self(1);
+    pub const LoaderData: Self = Self(2);
+    pub const BootServicesCode: Self = Self(3);
+    pub const BootServicesData: Self = Self(4);
+    pub const RuntimeServicesCode: Self = Self(5);
+    pub const RuntimeServicesData: Self = Self(6);
+    pub const ConventionalMemory: Self = Self(7);
+    pub const UnusableMemory: Self = Self(8);
+    pub const ACPIReclaimMemory: Self = Self(9);
+    pub const ACPIMemoryNVS: Self = Self(10);
+    pub const MemoryMappedIO: Self = Self(11);
+    pub const MemoryMappedIOPortSpace: Self = Self(12);
+    pub const PalCode: Self = Self(13);
+    pub const PersistentMemory: Self = Self(14);
+}
+
+impl Debug for MemoryType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match *self {
+            Self::ReservedMemoryType => write!(f, "EfiReservedMemoryType"),
+            Self::LoaderCode => write!(f, "EfiLoaderCode"),
+            Self::LoaderData => write!(f, "EfiLoaderData"),
+            Self::BootServicesCode => write!(f, "EfiBootServicesCode"),
+            Self::BootServicesData => write!(f, "EfiBootServicesData"),
+            Self::RuntimeServicesCode => write!(f, "EfiRuntimeServicesCode"),
+            Self::RuntimeServicesData => write!(f, "EfiRuntimeServicesData"),
+            Self::ConventionalMemory => write!(f, "EfiConventionalMemory"),
+            Self::UnusableMemory => write!(f, "EfiUnusableMemory"),
+            Self::ACPIReclaimMemory => write!(f, "EfiACPIReclaimMemory"),
+            Self::ACPIMemoryNVS => write!(f, "EfiACPIMemoryNVS"),
+            Self::MemoryMappedIO => write!(f, "EfiMemoryMappedIO"),
+            Self::MemoryMappedIOPortSpace => write!(f, "EfiMemoryMappedIOPortSpace"),
+            Self::PalCode => write!(f, "EfiPalCode"),
+            Self::PersistentMemory => write!(f, "EfiPersistentMemory"),
+            Self(x) => write!(f, "EfiUnknownMemoryType({x:#X})"),
+        }
+    }
 }
 
 #[derive(Debug)]
