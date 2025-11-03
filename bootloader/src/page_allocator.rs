@@ -194,10 +194,7 @@ pub unsafe fn init_page_allocator(
     for i in 0..memory_map_count {
         let memory_descriptor = unsafe { &*memory_map.byte_add(i * memory_descriptor_size) };
 
-        let mut can_use_page = matches!(
-            memory_descriptor.memory_type,
-            efi::MemoryType::ConventionalMemory
-        );
+        let mut can_use_page = memory_descriptor.memory_type != efi::MemoryType::ConventionalMemory;
 
         if can_use_page {
             if ptr.is_null() {
@@ -279,12 +276,7 @@ pub unsafe fn init_page_allocator(
 
     for i in 0..memory_map_count {
         let memory_descriptor = unsafe { &*memory_map.byte_add(i * memory_descriptor_size) };
-        if !matches!(
-            memory_descriptor.memory_type,
-            efi::MemoryType::ConventionalMemory
-                | efi::MemoryType::BootServicesCode
-                | efi::MemoryType::BootServicesData
-        ) {
+        if memory_descriptor.memory_type != efi::MemoryType::ConventionalMemory {
             for index in 0..memory_descriptor.number_of_pages {
                 unsafe {
                     page_allocator
